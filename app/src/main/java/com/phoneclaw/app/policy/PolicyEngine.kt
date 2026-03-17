@@ -3,6 +3,7 @@ package com.phoneclaw.app.policy
 import com.phoneclaw.app.contracts.ActionSpec
 import com.phoneclaw.app.contracts.RiskLevel
 import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.web.normalizeWebUrl
 
 data class PolicyDecision(
     val allowed: Boolean,
@@ -65,9 +66,33 @@ class DefaultPolicyEngine(
             )
         }
 
+        if (actionSpec.actionId in urlRequiredActions) {
+            val url = actionSpec.params["url"]
+            if (url.isNullOrBlank()) {
+                return PolicyDecision(
+                    allowed = false,
+                    requiresConfirmation = false,
+                    reason = "Browser actions require a non-empty url parameter.",
+                )
+            }
+
+            if (normalizeWebUrl(url) == null) {
+                return PolicyDecision(
+                    allowed = false,
+                    requiresConfirmation = false,
+                    reason = "Browser actions only support valid http or https URLs.",
+                )
+            }
+        }
+
         return PolicyDecision(
             allowed = true,
             requiresConfirmation = registeredAction.action.requiresConfirmation || actionSpec.requiresConfirmation,
         )
     }
 }
+
+private val urlRequiredActions = setOf(
+    "open_web_url",
+    "fetch_web_page_content",
+)

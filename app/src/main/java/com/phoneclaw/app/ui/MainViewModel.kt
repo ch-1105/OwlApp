@@ -33,10 +33,10 @@ data class MainUiState(
             id = "welcome",
             role = ChatRole.ASSISTANT,
             text = """
-                我已经准备好了。你可以直接让我执行当前已接入的能力，比如：
+                我已经准备好了。你现在可以直接让我：
                 - 打开系统设置
-                - 打开 Wi-Fi 设置
-                - 打开蓝牙设置
+                - 打开某个网页
+                - 读取某个网页的内容并返回给你
             """.trimIndent(),
         ),
     ),
@@ -98,6 +98,11 @@ class MainViewModel(
                     executionResult?.let { result ->
                         append("\n结果：${result.resultSummary}")
 
+                        val surfacedUrl = result.outputData["page_url"] ?: result.outputData["opened_url"]
+                        if (!surfacedUrl.isNullOrBlank()) {
+                            append("\n地址：$surfacedUrl")
+                        }
+
                         val pageTitle = result.outputData["page_title"]
                         if (!pageTitle.isNullOrBlank()) {
                             append("\n页面标题：$pageTitle")
@@ -106,11 +111,6 @@ class MainViewModel(
                         val pageContent = result.outputData["page_content"]
                         if (!pageContent.isNullOrBlank()) {
                             append("\n网页内容摘要：\n$pageContent")
-                        }
-
-                        val openedUrl = result.outputData["opened_url"]
-                        if (!openedUrl.isNullOrBlank()) {
-                            append("\n地址：$openedUrl")
                         }
                     }
                 }

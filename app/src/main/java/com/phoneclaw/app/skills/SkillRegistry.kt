@@ -4,12 +4,18 @@ import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.RiskLevel
 import com.phoneclaw.app.contracts.SkillActionManifest
 import com.phoneclaw.app.contracts.SkillManifest
+import com.phoneclaw.app.web.containsWebFetchIntent
+import com.phoneclaw.app.web.extractFirstWebTarget
 
 private const val SCHEMA_VERSION = "v1alpha1"
 private const val SETTINGS_PACKAGE = "com.android.settings"
 private const val INTENT_SETTINGS = "android.settings.SETTINGS"
 private const val INTENT_WIFI_SETTINGS = "android.settings.WIFI_SETTINGS"
 private const val INTENT_BLUETOOTH_SETTINGS = "android.settings.BLUETOOTH_SETTINGS"
+private const val INTENT_VIEW = "android.intent.action.VIEW"
+
+private const val ACTION_OPEN_WEB_URL = "open_web_url"
+private const val ACTION_FETCH_WEB_PAGE_CONTENT = "fetch_web_page_content"
 
 data class RegisteredSkillAction(
     val skill: SkillManifest,
@@ -19,11 +25,12 @@ data class RegisteredSkillAction(
     val actionId: String
         get() = action.actionId
 
-    fun toPlannedActionPayload(): PlannedActionPayload {
+    fun toPlannedActionPayload(params: Map<String, String> = emptyMap()): PlannedActionPayload {
         return PlannedActionPayload(
             actionId = action.actionId,
             skillId = skill.skillId,
             intentSummary = action.description,
+            params = params,
             riskLevel = action.riskLevel,
             requiresConfirmation = action.requiresConfirmation,
             executorType = action.executorType,
@@ -125,9 +132,61 @@ class StaticSkillRegistry : SkillRegistry {
             ),
             intentAction = INTENT_SETTINGS,
         ),
+        registeredBrowserAction(
+            action = SkillActionManifest(
+                actionId = ACTION_OPEN_WEB_URL,
+                displayName = "Open Web URL",
+                description = "Open a web page in the default browser",
+                executorType = "browser_intent",
+                riskLevel = RiskLevel.SAFE,
+                requiresConfirmation = false,
+                expectedOutcome = "The target URL becomes foreground in the default browser",
+                exampleUtterances = listOf(
+                    "open https://openai.com",
+                    "在浏览器打开 https://example.com",
+                    "打开网页 https://news.ycombinator.com",
+                ),
+                matchKeywords = listOf(
+                    "openwebsite",
+                    "openwebpage",
+                    "openurl",
+                    "打开网页",
+                    "打开网站",
+                    "浏览器打开",
+                ),
+            ),
+            intentAction = INTENT_VIEW,
+        ),
+        registeredBrowserAction(
+            action = SkillActionManifest(
+                actionId = ACTION_FETCH_WEB_PAGE_CONTENT,
+                displayName = "Fetch Web Page Content",
+                description = "Fetch the readable text content of a web page",
+                executorType = "web_fetch",
+                riskLevel = RiskLevel.SAFE,
+                requiresConfirmation = false,
+                expectedOutcome = "PhoneClaw returns the page title and readable text content",
+                exampleUtterances = listOf(
+                    "fetch https://example.com content",
+                    "读取 https://openai.com 的网页内容",
+                    "帮我获取 https://openai.com 的内容",
+                ),
+                matchKeywords = listOf(
+                    "fetchwebpage",
+                    "readwebpage",
+                    "webpagecontent",
+                    "网页内容",
+                    "读取网页",
+                    "获取网页内容",
+                    "抓取网页",
+                    "网页正文",
+                ),
+            ),
+            intentAction = "",
+        ),
     )
 
-    override fun allSkills(): List<SkillManifest> = registeredActions.map { it.skill }
+    override fun allSkills(): List<SkillManifest> = registeredActions.map { it.skill }.distinctBy { it.skillId }
 
     override fun allActions(): List<RegisteredSkillAction> = registeredActions
 
@@ -137,11 +196,26 @@ class StaticSkillRegistry : SkillRegistry {
 
     override fun matchUserMessage(userMessage: String): RegisteredSkillAction? {
         val normalized = userMessage.normalizeForMatch()
-        return registeredActions
+        val bestTextMatch = registeredActions
             .map { action -> action to action.matchScore(normalized) }
             .filter { (_, score) -> score > 0 }
             .maxByOrNull { (_, score) -> score }
             ?.first
+
+        if (bestTextMatch != null) {
+            return bestTextMatch
+        }
+
+        val webTarget = extractFirstWebTarget(userMessage)
+        if (!webTarget.isNullOrBlank()) {
+            return if (containsWebFetchIntent(userMessage)) {
+                findAction(ACTION_FETCH_WEB_PAGE_CONTENT)
+            } else {
+                findAction(ACTION_OPEN_WEB_URL)
+            }
+        }
+
+        return null
     }
 }
 
@@ -161,6 +235,31 @@ private fun registeredSystemAction(
         platform = "android",
         appPackage = SETTINGS_PACKAGE,
         defaultRiskLevel = action.riskLevel,
+        enabled = true,
+        actions = listOf(action),
+    )
+
+    return RegisteredSkillAction(
+        skill = manifest,
+        action = action,
+        intentAction = intentAction,
+    )
+}
+
+private fun registeredBrowserAction(
+    action: SkillActionManifest,
+    intentAction: String,
+): RegisteredSkillAction {
+    val manifest = SkillManifest(
+        schemaVersion = SCHEMA_VERSION,
+        skillId = "browser.web",
+        skillVersion = "0.1.0",
+        skillType = "browser",
+        displayName = "Browser Tools",
+        owner = "core",
+        platform = "android",
+        appPackage = null,
+        defaultRiskLevel = RiskLevel.SAFE,
         enabled = true,
         actions = listOf(action),
     )

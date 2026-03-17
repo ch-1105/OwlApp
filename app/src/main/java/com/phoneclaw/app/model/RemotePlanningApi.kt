@@ -250,6 +250,12 @@ private fun CloudModelConfig.parseSuccessResponse(
 
 private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
     val supportedActions = skillRegistry.allActions().joinToString("\n") { action ->
+        val requiredParams = if (action.action.actionId in setOf("open_web_url", "fetch_web_page_content")) {
+            "url"
+        } else {
+            "none"
+        }
+
         """
         - action_id: ${action.action.actionId}
           skill_id: ${action.skill.skillId}
@@ -259,6 +265,7 @@ private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
           requires_confirmation: ${action.action.requiresConfirmation}
           executor_type: ${action.action.executorType}
           expected_outcome: ${action.action.expectedOutcome}
+          required_params: $requiredParams
           example_utterances: ${action.action.exampleUtterances.joinToString(" | ")}
         """.trimIndent()
     }
@@ -266,9 +273,17 @@ private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
     return """
         You are the planning model for PhoneClaw.
         Return only a JSON object with no markdown and no explanation.
-        Choose exactly one supported action when the user clearly asks to open that Android settings screen.
+        Choose exactly one supported action when the user clearly asks for it.
         Supported actions in this build:
         $supportedActions
+
+        Special rules:
+        - If the user asks to open a website or URL, use `open_web_url`.
+        - If the user asks to fetch, read, extract, or summarize webpage content, use `fetch_web_page_content`.
+        - Browser actions must include `params.url`.
+        - Preserve the exact URL when the user provides one.
+        - If the user provides a bare domain like `openai.com`, normalize it to `https://openai.com`.
+        - For non-browser actions, use an empty object for `params`.
 
         If the user request maps clearly to one supported action, return:
         {
@@ -279,16 +294,21 @@ private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
             "params": {},
             "risk_level": "SAFE",
             "requires_confirmation": false,
-            "executor_type": "intent",
+            "executor_type": "...",
             "expected_outcome": "..."
           }
+        }
+
+        For browser actions, `params` should look like:
+        {
+          "url": "https://example.com"
         }
 
         Use the exact action_id, skill_id, risk_level, requires_confirmation, executor_type, and expected_outcome from the supported action catalog.
         Generate intent_summary as a short English summary for the chosen action.
         If the request is not supported or ambiguous, return:
         {
-          "error": "This build only supports the registered system settings actions.",
+          "error": "This build only supports the registered system and browser actions.",
           "error_kind": "PROVIDER_REFUSED"
         }
     """.trimIndent()
@@ -434,3 +454,4 @@ private fun String.toModelApiStyle(): ModelApiStyle {
         else -> throw IllegalArgumentException("Unsupported model API style: $this")
     }
 }
+

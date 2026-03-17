@@ -31,12 +31,50 @@ class DefaultPolicyEngineTest {
     }
 
     @Test
+    fun allowsBrowserFetchActionWithValidUrl() {
+        val decision = policyEngine.review(
+            ActionSpec(
+                actionId = "fetch_web_page_content",
+                skillId = "browser.web",
+                taskId = "task-2",
+                intentSummary = "Fetch web page content",
+                params = mapOf("url" to "https://example.com"),
+                riskLevel = RiskLevel.SAFE,
+                requiresConfirmation = false,
+                executorType = "web_fetch",
+                expectedOutcome = "PhoneClaw returns the page title and readable text content",
+            ),
+        )
+
+        assertTrue(decision.allowed)
+    }
+
+    @Test
+    fun rejectsBrowserActionWithInvalidUrl() {
+        val decision = policyEngine.review(
+            ActionSpec(
+                actionId = "open_web_url",
+                skillId = "browser.web",
+                taskId = "task-3",
+                intentSummary = "Open a web page",
+                params = mapOf("url" to "not-a-url"),
+                riskLevel = RiskLevel.SAFE,
+                requiresConfirmation = false,
+                executorType = "browser_intent",
+                expectedOutcome = "The target URL becomes foreground in the default browser",
+            ),
+        )
+
+        assertFalse(decision.allowed)
+    }
+
+    @Test
     fun rejectsUnregisteredAction() {
         val decision = policyEngine.review(
             ActionSpec(
                 actionId = "open_notification_settings",
                 skillId = "system.notification_settings",
-                taskId = "task-2",
+                taskId = "task-4",
                 intentSummary = "Open Android notification settings",
                 params = emptyMap(),
                 riskLevel = RiskLevel.SAFE,

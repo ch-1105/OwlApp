@@ -30,4 +30,20 @@ class StaticSkillRegistryTest {
         assertNotNull(action)
         assertEquals("open_system_settings", action?.actionId)
     }
+
+    @Test
+    fun matchesBrowserOpenActionWhenUrlIsPresent() {
+        val action = registry.matchUserMessage("打开 https://openai.com")
+
+        assertNotNull(action)
+        assertEquals("open_web_url", action?.actionId)
+    }
+
+    @Test
+    fun matchesBrowserFetchActionWhenReadingContent() {
+        val action = registry.matchUserMessage("帮我读取 https://example.com 的网页内容")
+
+        assertNotNull(action)
+        assertEquals("fetch_web_page_content", action?.actionId)
+    }
 }

@@ -41,7 +41,8 @@ fun PhoneClawApp(
     val supportedActions = appGraph.skillRegistry.allActions()
     val promptSuggestions = listOf(
         "打开系统设置",
-        "打开 Wi-Fi 设置",
+        "打开 https://openai.com",
+        "读取 https://example.com 的网页内容",
         "打开蓝牙设置",
     )
 
@@ -126,7 +127,7 @@ private fun CapabilityCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "现在的主链路已经接通到云端规划、策略审核和动作执行。当前先验证低风险动作能力。",
+                text = "现在已经支持低风险系统动作，以及简单浏览器能力：打开网页、抓取网页正文并直接回显给你。",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -309,7 +310,7 @@ private fun ComposerCard(
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 placeholder = {
-                    Text("例如：打开系统设置")
+                    Text("例如：打开 https://openai.com")
                 },
             )
             Spacer(modifier = Modifier.height(12.dp))

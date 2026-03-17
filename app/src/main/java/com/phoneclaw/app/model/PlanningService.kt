@@ -6,7 +6,11 @@ import com.phoneclaw.app.contracts.ModelResponse
 import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.PlanningTrace
 import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.web.extractFirstWebTarget
+import com.phoneclaw.app.web.normalizeWebUrl
 import java.util.UUID
+
+private val browserActionIds = setOf("open_web_url", "fetch_web_page_content")
 
 sealed interface PlanningOutcome {
     data class PlannedAction(val actionSpec: ActionSpec) : PlanningOutcome
@@ -31,7 +35,8 @@ class StubCloudModelAdapter(
     private val skillRegistry: SkillRegistry,
 ) : CloudModelAdapter {
     override suspend fun planAction(request: ModelRequest): ModelResponse {
-        val matchedAction = skillRegistry.matchUserMessage(request.inputMessages.joinToString(" "))
+        val userMessage = request.inputMessages.joinToString(" ")
+        val matchedAction = skillRegistry.matchUserMessage(userMessage)
 
         return if (matchedAction != null) {
             ModelResponse(
@@ -76,8 +81,18 @@ class DefaultPlanningService(
         val trace = response.toPlanningTrace()
 
         response.plannedAction?.let { payload ->
+            val normalizedPayload = payload.normalizeForUserMessage(userMessage)
+            if (normalizedPayload.requiresUrlParam() && normalizedPayload.params["url"].isNullOrBlank()) {
+                return PlanningResult(
+                    outcome = PlanningOutcome.ClarificationNeeded(
+                        "请提供完整网页地址，例如 https://example.com 。",
+                    ),
+                    trace = trace,
+                )
+            }
+
             return PlanningResult(
-                outcome = PlanningOutcome.PlannedAction(payload.toActionSpec(taskId)),
+                outcome = PlanningOutcome.PlannedAction(normalizedPayload.toActionSpec(taskId)),
                 trace = trace,
             )
         }
@@ -92,11 +107,32 @@ class DefaultPlanningService(
         return PlanningResult(
             outcome = PlanningOutcome.ClarificationNeeded(
                 response.outputText.ifBlank {
-                    "Please clarify which supported settings screen you want to open."
+                    "Please clarify which supported action you want to run."
                 },
             ),
             trace = trace,
         )
+    }
+
+    private fun PlannedActionPayload.normalizeForUserMessage(userMessage: String): PlannedActionPayload {
+        if (!requiresUrlParam()) return this
+
+        val extractedUrl = params["url"]
+            ?.takeIf { it.isNotBlank() }
+            ?: extractFirstWebTarget(userMessage)
+
+        val normalizedUrl = extractedUrl?.let(::normalizeWebUrl)
+        return copy(
+            params = params.toMutableMap().apply {
+                if (!normalizedUrl.isNullOrBlank()) {
+                    put("url", normalizedUrl)
+                }
+            },
+        )
+    }
+
+    private fun PlannedActionPayload.requiresUrlParam(): Boolean {
+        return actionId in browserActionIds
     }
 
     private fun PlannedActionPayload.toActionSpec(taskId: String): ActionSpec {

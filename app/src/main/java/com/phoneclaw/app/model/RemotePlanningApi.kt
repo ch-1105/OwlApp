@@ -174,8 +174,18 @@ class FallbackCloudModelAdapter(
         }
 
         val remoteResponse = remoteAdapter.planAction(request)
-        return if (remoteResponse.errorKind == ModelErrorKind.DISABLED) {
-            fallbackAdapter.planAction(request)
+        if (remoteResponse.plannedAction != null) {
+            return remoteResponse
+        }
+
+        val shouldTryFallback = remoteResponse.error != null || remoteResponse.errorKind != null
+        if (!shouldTryFallback) {
+            return remoteResponse
+        }
+
+        val fallbackResponse = fallbackAdapter.planAction(request)
+        return if (fallbackResponse.plannedAction != null) {
+            fallbackResponse
         } else {
             remoteResponse
         }
@@ -454,4 +464,5 @@ private fun String.toModelApiStyle(): ModelApiStyle {
         else -> throw IllegalArgumentException("Unsupported model API style: $this")
     }
 }
+
 

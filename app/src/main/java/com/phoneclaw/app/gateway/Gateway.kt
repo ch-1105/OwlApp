@@ -20,30 +20,33 @@ class DefaultGateway(
 ) : Gateway {
     override suspend fun submitUserMessage(userMessage: String): TaskSnapshot {
         val taskId = UUID.randomUUID().toString()
+        val planning = planningService.planAction(taskId, userMessage)
 
-        return when (val planning = planningService.planAction(taskId, userMessage)) {
+        return when (val outcome = planning.outcome) {
             is PlanningOutcome.PlannedAction -> {
-                val decision = policyEngine.review(planning.actionSpec)
+                val decision = policyEngine.review(outcome.actionSpec)
                 if (!decision.allowed) {
                     TaskSnapshot(
                         taskId = taskId,
                         state = TaskState.REFUSED,
                         userMessage = userMessage,
-                        actionSpec = planning.actionSpec,
+                        actionSpec = outcome.actionSpec,
+                        planningTrace = planning.trace,
                         errorMessage = decision.reason,
                     )
                 } else {
                     val executionRequest = ExecutionRequest(
                         requestId = UUID.randomUUID().toString(),
                         taskId = taskId,
-                        actionSpec = planning.actionSpec,
+                        actionSpec = outcome.actionSpec,
                     )
                     val result = actionExecutor.execute(executionRequest)
                     TaskSnapshot(
                         taskId = taskId,
                         state = if (result.status == "success") TaskState.SUCCEEDED else TaskState.FAILED,
                         userMessage = userMessage,
-                        actionSpec = planning.actionSpec,
+                        actionSpec = outcome.actionSpec,
+                        planningTrace = planning.trace,
                         executionResult = result,
                         errorMessage = result.errorMessage,
                     )
@@ -55,7 +58,8 @@ class DefaultGateway(
                     taskId = taskId,
                     state = TaskState.FAILED,
                     userMessage = userMessage,
-                    errorMessage = planning.question,
+                    planningTrace = planning.trace,
+                    errorMessage = outcome.question,
                 )
             }
 
@@ -64,10 +68,10 @@ class DefaultGateway(
                     taskId = taskId,
                     state = TaskState.REFUSED,
                     userMessage = userMessage,
-                    errorMessage = planning.reason,
+                    planningTrace = planning.trace,
+                    errorMessage = outcome.reason,
                 )
             }
         }
     }
 }
-

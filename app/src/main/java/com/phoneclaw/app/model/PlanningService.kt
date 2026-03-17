@@ -4,6 +4,7 @@ import com.phoneclaw.app.contracts.ActionSpec
 import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
 import com.phoneclaw.app.contracts.PlannedActionPayload
+import com.phoneclaw.app.contracts.PlanningTrace
 import com.phoneclaw.app.contracts.RiskLevel
 import java.util.UUID
 
@@ -13,12 +14,17 @@ sealed interface PlanningOutcome {
     data class Refused(val reason: String) : PlanningOutcome
 }
 
+data class PlanningResult(
+    val outcome: PlanningOutcome,
+    val trace: PlanningTrace,
+)
+
 interface CloudModelAdapter {
     suspend fun planAction(request: ModelRequest): ModelResponse
 }
 
 interface PlanningService {
-    suspend fun planAction(taskId: String, userMessage: String): PlanningOutcome
+    suspend fun planAction(taskId: String, userMessage: String): PlanningResult
 }
 
 class StubCloudModelAdapter : CloudModelAdapter {
@@ -34,7 +40,7 @@ class StubCloudModelAdapter : CloudModelAdapter {
                 requestId = request.requestId,
                 provider = "stub-cloud",
                 modelId = "stub-settings-router",
-                outputText = "Planned open_system_settings",
+                outputText = "Planned open_system_settings via stub adapter.",
                 plannedAction = PlannedActionPayload(
                     actionId = "open_system_settings",
                     skillId = "system.settings",
@@ -62,7 +68,7 @@ class DefaultPlanningService(
     private val allowCloud: Boolean,
     private val preferredProvider: String,
 ) : PlanningService {
-    override suspend fun planAction(taskId: String, userMessage: String): PlanningOutcome {
+    override suspend fun planAction(taskId: String, userMessage: String): PlanningResult {
         val request = ModelRequest(
             requestId = UUID.randomUUID().toString(),
             taskId = taskId,
@@ -73,18 +79,29 @@ class DefaultPlanningService(
         )
 
         val response = cloudModelAdapter.planAction(request)
+        val trace = response.toPlanningTrace()
+
         response.plannedAction?.let { payload ->
-            return PlanningOutcome.PlannedAction(payload.toActionSpec(taskId))
+            return PlanningResult(
+                outcome = PlanningOutcome.PlannedAction(payload.toActionSpec(taskId)),
+                trace = trace,
+            )
         }
 
         if (response.error != null) {
-            return PlanningOutcome.Refused(response.error)
+            return PlanningResult(
+                outcome = PlanningOutcome.Refused(response.error),
+                trace = trace,
+            )
         }
 
-        return PlanningOutcome.ClarificationNeeded(
-            response.outputText.ifBlank {
-                "Please clarify what settings page you want to open."
-            },
+        return PlanningResult(
+            outcome = PlanningOutcome.ClarificationNeeded(
+                response.outputText.ifBlank {
+                    "Please clarify what settings page you want to open."
+                },
+            ),
+            trace = trace,
         )
     }
 
@@ -99,6 +116,17 @@ class DefaultPlanningService(
             requiresConfirmation = requiresConfirmation,
             executorType = executorType,
             expectedOutcome = expectedOutcome,
+        )
+    }
+
+    private fun ModelResponse.toPlanningTrace(): PlanningTrace {
+        return PlanningTrace(
+            provider = provider,
+            modelId = modelId,
+            outputText = outputText,
+            errorMessage = error,
+            errorKind = errorKind,
+            usedRemote = provider.isNotBlank() && provider != "stub-cloud",
         )
     }
 }

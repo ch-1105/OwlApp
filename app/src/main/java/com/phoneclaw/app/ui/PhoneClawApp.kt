@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,7 +64,7 @@ fun PhoneClawApp(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "This build wires Gateway -> Planning -> Policy -> Executor using a stub cloud adapter. The only enabled action is open_system_settings.",
+                            text = "This build wires Gateway -> Planning -> Policy -> Executor. It can use a real cloud provider when configured and will show the model reply used for planning.",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
@@ -99,22 +100,56 @@ fun PhoneClawApp(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Task ID: ${task.taskId}")
+                            Text("User request: ${task.userMessage}")
                             Text("State: ${task.state}")
                             task.actionSpec?.let { action ->
                                 Text("Action: ${action.actionId}")
                                 Text("Skill: ${action.skillId}")
                             }
+                            task.planningTrace?.let { trace ->
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Model trace",
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text("Source: ${if (trace.usedRemote) "remote" else "stub"}")
+                                Text("Provider: ${trace.provider.ifBlank { "unknown" }}")
+                                Text("Model: ${trace.modelId.ifBlank { "unknown" }}")
+                                trace.errorKind?.let { errorKind ->
+                                    Text("Model error kind: $errorKind")
+                                }
+                                trace.errorMessage?.let { error ->
+                                    Text("Model error: $error")
+                                }
+                                if (trace.outputText.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("AI reply:")
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    SelectionContainer {
+                                        Text(
+                                            text = trace.outputText,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
+                                }
+                            }
                             task.executionResult?.let { result ->
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Execution trace",
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
                                 Text("Execution: ${result.status}")
                                 Text("Summary: ${result.resultSummary}")
                             }
                             task.errorMessage?.let { error ->
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text("Error: $error")
                             }
                             if (task.state == TaskState.SUCCEEDED) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "If you are running on a device, the system settings screen should open.",
+                                    text = "If you are running on a device, the system settings screen should open. Return to PhoneClaw to inspect the model reply above.",
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }

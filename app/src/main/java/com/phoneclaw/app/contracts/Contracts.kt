@@ -101,11 +101,21 @@ data class ModelResponse(
     val errorKind: ModelErrorKind? = null,
 )
 
+data class PlanningTrace(
+    val provider: String,
+    val modelId: String,
+    val outputText: String,
+    val errorMessage: String? = null,
+    val errorKind: ModelErrorKind? = null,
+    val usedRemote: Boolean,
+)
+
 data class TaskSnapshot(
     val taskId: String,
     val state: TaskState,
     val userMessage: String,
     val actionSpec: ActionSpec? = null,
+    val planningTrace: PlanningTrace? = null,
     val executionResult: ExecutionResult? = null,
     val errorMessage: String? = null,
 )

@@ -3,6 +3,48 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+fun loadDotEnv(): Map<String, String> {
+    val envFile = rootProject.file(".env")
+    if (!envFile.exists()) return emptyMap()
+
+    return buildMap {
+        envFile.readLines().forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) return@forEach
+
+            val separatorIndex = trimmed.indexOf('=')
+            if (separatorIndex <= 0) return@forEach
+
+            val key = trimmed.substring(0, separatorIndex).trim()
+            val rawValue = trimmed.substring(separatorIndex + 1).trim()
+            val value = rawValue.removeSurrounding("\"").removeSurrounding("'")
+            put(key, value)
+        }
+    }
+}
+
+fun String.asBuildConfigString(): String =
+    "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+val dotEnv = loadDotEnv()
+
+fun configuredString(name: String, default: String = ""): String =
+    providers.gradleProperty(name)
+        .orElse(providers.environmentVariable(name))
+        .orElse(dotEnv[name] ?: default)
+        .get()
+
+fun configuredInt(name: String, default: Int): Int =
+    configuredString(name, default.toString()).toIntOrNull() ?: default
+
+val modelProvider = configuredString("PHONECLAW_MODEL_PROVIDER", "stub")
+val modelBaseUrl = configuredString("PHONECLAW_MODEL_BASE_URL", "")
+val modelApiStyle = configuredString("PHONECLAW_MODEL_API_STYLE", "phoneclaw-gateway")
+val modelApiKey = configuredString("PHONECLAW_MODEL_API_KEY", "")
+val modelId = configuredString("PHONECLAW_MODEL_ID", "")
+val modelConnectTimeoutSeconds = configuredInt("PHONECLAW_MODEL_CONNECT_TIMEOUT_SECONDS", 15)
+val modelReadTimeoutSeconds = configuredInt("PHONECLAW_MODEL_READ_TIMEOUT_SECONDS", 45)
+
 android {
     namespace = "com.phoneclaw.app"
     compileSdk = 36
@@ -15,6 +57,14 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "PHONECLAW_MODEL_PROVIDER", modelProvider.asBuildConfigString())
+        buildConfigField("String", "PHONECLAW_MODEL_BASE_URL", modelBaseUrl.asBuildConfigString())
+        buildConfigField("String", "PHONECLAW_MODEL_API_STYLE", modelApiStyle.asBuildConfigString())
+        buildConfigField("String", "PHONECLAW_MODEL_API_KEY", modelApiKey.asBuildConfigString())
+        buildConfigField("String", "PHONECLAW_MODEL_ID", modelId.asBuildConfigString())
+        buildConfigField("int", "PHONECLAW_MODEL_CONNECT_TIMEOUT_SECONDS", modelConnectTimeoutSeconds.toString())
+        buildConfigField("int", "PHONECLAW_MODEL_READ_TIMEOUT_SECONDS", modelReadTimeoutSeconds.toString())
     }
 
     buildTypes {

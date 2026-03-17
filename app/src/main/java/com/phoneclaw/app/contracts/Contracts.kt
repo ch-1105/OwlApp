@@ -71,13 +71,34 @@ data class ModelRequest(
     val preferredProvider: String,
 )
 
+data class PlannedActionPayload(
+    val actionId: String,
+    val skillId: String,
+    val intentSummary: String,
+    val params: Map<String, String> = emptyMap(),
+    val riskLevel: RiskLevel,
+    val requiresConfirmation: Boolean,
+    val executorType: String,
+    val expectedOutcome: String,
+)
+
+enum class ModelErrorKind {
+    DISABLED,
+    NETWORK,
+    INVALID_RESPONSE,
+    PROVIDER_FAILURE,
+    PROVIDER_REFUSED,
+    UNKNOWN,
+}
+
 data class ModelResponse(
     val requestId: String,
     val provider: String,
     val modelId: String,
     val outputText: String,
-    val structuredOutput: String? = null,
+    val plannedAction: PlannedActionPayload? = null,
     val error: String? = null,
+    val errorKind: ModelErrorKind? = null,
 )
 
 data class TaskSnapshot(
@@ -88,4 +109,3 @@ data class TaskSnapshot(
     val executionResult: ExecutionResult? = null,
     val errorMessage: String? = null,
 )
-

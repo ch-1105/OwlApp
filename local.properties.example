@@ -1,3 +1,4 @@
-# Copy this file to local.properties and adjust the SDK path for your machine.
-sdk.dir=C\\:\\Users\\ch\\AppData\\Local\\Android\\Sdk
+# Copy this file to local.properties and adjust only the Android SDK path for your machine.
+# Do not put model API keys or remote endpoint secrets in local.properties.
 
+sdk.dir=C\:\Users\ch\AppData\Local\Android\Sdk

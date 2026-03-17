@@ -3,6 +3,7 @@ package com.phoneclaw.app.model
 import com.phoneclaw.app.contracts.ActionSpec
 import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
+import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.RiskLevel
 import java.util.UUID
 
@@ -34,7 +35,15 @@ class StubCloudModelAdapter : CloudModelAdapter {
                 provider = "stub-cloud",
                 modelId = "stub-settings-router",
                 outputText = "Planned open_system_settings",
-                structuredOutput = "open_system_settings",
+                plannedAction = PlannedActionPayload(
+                    actionId = "open_system_settings",
+                    skillId = "system.settings",
+                    intentSummary = "Open Android system settings",
+                    riskLevel = RiskLevel.SAFE,
+                    requiresConfirmation = false,
+                    executorType = "intent",
+                    expectedOutcome = "System settings becomes foreground",
+                ),
             )
         } else {
             ModelResponse(
@@ -50,6 +59,8 @@ class StubCloudModelAdapter : CloudModelAdapter {
 
 class DefaultPlanningService(
     private val cloudModelAdapter: CloudModelAdapter,
+    private val allowCloud: Boolean,
+    private val preferredProvider: String,
 ) : PlanningService {
     override suspend fun planAction(taskId: String, userMessage: String): PlanningOutcome {
         val request = ModelRequest(
@@ -57,31 +68,37 @@ class DefaultPlanningService(
             taskId = taskId,
             taskType = "plan_action",
             inputMessages = listOf(userMessage),
-            allowCloud = true,
-            preferredProvider = "stub-cloud",
+            allowCloud = allowCloud,
+            preferredProvider = preferredProvider,
         )
 
         val response = cloudModelAdapter.planAction(request)
-        return when {
-            response.structuredOutput == "open_system_settings" -> {
-                PlanningOutcome.PlannedAction(
-                    ActionSpec(
-                        actionId = "open_system_settings",
-                        skillId = "system.settings",
-                        taskId = taskId,
-                        intentSummary = "Open Android system settings",
-                        params = emptyMap(),
-                        riskLevel = RiskLevel.SAFE,
-                        requiresConfirmation = false,
-                        executorType = "intent",
-                        expectedOutcome = "System settings becomes foreground",
-                    ),
-                )
-            }
-
-            response.error != null -> PlanningOutcome.Refused(response.error)
-            else -> PlanningOutcome.ClarificationNeeded("Please clarify what settings page you want to open.")
+        response.plannedAction?.let { payload ->
+            return PlanningOutcome.PlannedAction(payload.toActionSpec(taskId))
         }
+
+        if (response.error != null) {
+            return PlanningOutcome.Refused(response.error)
+        }
+
+        return PlanningOutcome.ClarificationNeeded(
+            response.outputText.ifBlank {
+                "Please clarify what settings page you want to open."
+            },
+        )
+    }
+
+    private fun PlannedActionPayload.toActionSpec(taskId: String): ActionSpec {
+        return ActionSpec(
+            actionId = actionId,
+            skillId = skillId,
+            taskId = taskId,
+            intentSummary = intentSummary,
+            params = params,
+            riskLevel = riskLevel,
+            requiresConfirmation = requiresConfirmation,
+            executorType = executorType,
+            expectedOutcome = expectedOutcome,
+        )
     }
 }
-

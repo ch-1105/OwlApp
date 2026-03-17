@@ -16,10 +16,30 @@ enum class TaskState {
 }
 
 data class SkillManifest(
+    val schemaVersion: String,
     val skillId: String,
     val skillVersion: String,
+    val skillType: String,
     val displayName: String,
-    val actions: List<String>,
+    val owner: String,
+    val platform: String,
+    val appPackage: String? = null,
+    val defaultRiskLevel: RiskLevel,
+    val enabled: Boolean,
+    val actions: List<SkillActionManifest>,
+)
+
+data class SkillActionManifest(
+    val actionId: String,
+    val displayName: String,
+    val description: String,
+    val executorType: String,
+    val riskLevel: RiskLevel,
+    val requiresConfirmation: Boolean,
+    val expectedOutcome: String,
+    val enabled: Boolean = true,
+    val exampleUtterances: List<String> = emptyList(),
+    val matchKeywords: List<String> = emptyList(),
 )
 
 data class ActionSpec(

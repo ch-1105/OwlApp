@@ -2,10 +2,10 @@ package com.phoneclaw.app.executor
 
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
 import com.phoneclaw.app.contracts.ExecutionRequest
 import com.phoneclaw.app.contracts.ExecutionResult
 import com.phoneclaw.app.contracts.VerificationResult
+import com.phoneclaw.app.skills.SkillRegistry
 
 interface ActionExecutor {
     suspend fun execute(request: ExecutionRequest): ExecutionResult
@@ -13,28 +13,48 @@ interface ActionExecutor {
 
 class IntentActionExecutor(
     private val appContext: Context,
+    private val skillRegistry: SkillRegistry,
 ) : ActionExecutor {
     override suspend fun execute(request: ExecutionRequest): ExecutionResult {
-        return when (request.actionSpec.actionId) {
-            "open_system_settings" -> openSystemSettings(request)
-            else -> ExecutionResult(
+        val registeredAction = skillRegistry.findAction(request.actionSpec.actionId)
+            ?: return ExecutionResult(
                 requestId = request.requestId,
                 taskId = request.taskId,
                 actionId = request.actionSpec.actionId,
                 status = "failed",
                 resultSummary = "Unsupported action",
-                errorMessage = "Executor has no implementation for ${request.actionSpec.actionId}.",
+                errorMessage = "Executor has no registry entry for ${request.actionSpec.actionId}.",
                 verification = VerificationResult(
                     passed = false,
-                    reason = "No executor route matched the requested action.",
+                    reason = "No registered action matched the requested action id.",
+                ),
+            )
+
+        if (registeredAction.action.executorType != "intent") {
+            return ExecutionResult(
+                requestId = request.requestId,
+                taskId = request.taskId,
+                actionId = request.actionSpec.actionId,
+                status = "failed",
+                resultSummary = "Unsupported executor type",
+                errorMessage = "Executor only supports intent actions in this milestone.",
+                verification = VerificationResult(
+                    passed = false,
+                    reason = "Registered action requires a non-intent executor.",
                 ),
             )
         }
+
+        return launchIntent(request, registeredAction.intentAction, registeredAction.action.displayName)
     }
 
-    private fun openSystemSettings(request: ExecutionRequest): ExecutionResult {
+    private fun launchIntent(
+        request: ExecutionRequest,
+        intentAction: String,
+        displayName: String,
+    ): ExecutionResult {
         return runCatching {
-            val intent = Intent(Settings.ACTION_SETTINGS).apply {
+            val intent = Intent(intentAction).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             appContext.startActivity(intent)
@@ -44,7 +64,7 @@ class IntentActionExecutor(
                 taskId = request.taskId,
                 actionId = request.actionSpec.actionId,
                 status = "success",
-                resultSummary = "System settings was launched.",
+                resultSummary = "$displayName was launched.",
                 verification = VerificationResult(
                     passed = true,
                     reason = "Intent dispatch completed without throwing.",
@@ -56,7 +76,7 @@ class IntentActionExecutor(
                 taskId = request.taskId,
                 actionId = request.actionSpec.actionId,
                 status = "failed",
-                resultSummary = "System settings launch failed.",
+                resultSummary = "$displayName launch failed.",
                 errorMessage = error.message,
                 verification = VerificationResult(
                     passed = false,
@@ -66,4 +86,3 @@ class IntentActionExecutor(
         }
     }
 }
-

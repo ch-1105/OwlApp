@@ -33,6 +33,8 @@ import com.phoneclaw.app.di.AppGraph
 fun PhoneClawApp(
     appGraph: AppGraph,
 ) {
+    val supportedActions = appGraph.skillRegistry.allActions()
+
     PhoneClawTheme {
         val viewModel: MainViewModel = viewModel(
             factory = MainViewModelFactory(appGraph.gateway),
@@ -59,12 +61,25 @@ fun PhoneClawApp(
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Milestone 1 skeleton",
+                            text = "Milestone 2 system skills",
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "This build wires Gateway -> Planning -> Policy -> Executor. It can use a real cloud provider when configured and will show the model reply used for planning.",
+                            text = "This build wires Gateway -> Planning -> Policy -> Executor through a static Skill Registry. It can use a real cloud provider and now supports multiple low-risk system settings actions.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Registered actions",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        supportedActions.forEach { action ->
+                            Text("- ${action.actionId}: ${action.action.displayName}")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Try: open wifi settings / 打开蓝牙设置 / 打开系统设置",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
@@ -149,7 +164,7 @@ fun PhoneClawApp(
                             if (task.state == TaskState.SUCCEEDED) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "If you are running on a device, the system settings screen should open. Return to PhoneClaw to inspect the model reply above.",
+                                    text = "If you are running on a device, the requested settings screen should open. Return to PhoneClaw to inspect the model reply above.",
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }

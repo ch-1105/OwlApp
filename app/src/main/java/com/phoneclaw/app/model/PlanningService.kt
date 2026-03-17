@@ -5,7 +5,7 @@ import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
 import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.PlanningTrace
-import com.phoneclaw.app.contracts.RiskLevel
+import com.phoneclaw.app.skills.SkillRegistry
 import java.util.UUID
 
 sealed interface PlanningOutcome {
@@ -27,37 +27,31 @@ interface PlanningService {
     suspend fun planAction(taskId: String, userMessage: String): PlanningResult
 }
 
-class StubCloudModelAdapter : CloudModelAdapter {
+class StubCloudModelAdapter(
+    private val skillRegistry: SkillRegistry,
+) : CloudModelAdapter {
     override suspend fun planAction(request: ModelRequest): ModelResponse {
-        val normalized = request.inputMessages.joinToString(" ").lowercase()
-        val wantsSettings =
-            normalized.contains("settings") ||
-                normalized.contains("设置") ||
-                normalized.contains("system setting")
+        val matchedAction = skillRegistry.matchUserMessage(request.inputMessages.joinToString(" "))
 
-        return if (wantsSettings) {
+        return if (matchedAction != null) {
             ModelResponse(
                 requestId = request.requestId,
                 provider = "stub-cloud",
-                modelId = "stub-settings-router",
-                outputText = "Planned open_system_settings via stub adapter.",
-                plannedAction = PlannedActionPayload(
-                    actionId = "open_system_settings",
-                    skillId = "system.settings",
-                    intentSummary = "Open Android system settings",
-                    riskLevel = RiskLevel.SAFE,
-                    requiresConfirmation = false,
-                    executorType = "intent",
-                    expectedOutcome = "System settings becomes foreground",
-                ),
+                modelId = "stub-skill-router",
+                outputText = "Planned ${matchedAction.actionId} via stub adapter.",
+                plannedAction = matchedAction.toPlannedActionPayload(),
             )
         } else {
             ModelResponse(
                 requestId = request.requestId,
                 provider = "stub-cloud",
-                modelId = "stub-settings-router",
+                modelId = "stub-skill-router",
                 outputText = "Need clarification",
-                error = "Only the open_system_settings path is scaffolded in this build.",
+                error = buildString {
+                    append("Supported actions in this build: ")
+                    append(skillRegistry.allActions().joinToString { it.actionId })
+                    append('.')
+                },
             )
         }
     }
@@ -98,7 +92,7 @@ class DefaultPlanningService(
         return PlanningResult(
             outcome = PlanningOutcome.ClarificationNeeded(
                 response.outputText.ifBlank {
-                    "Please clarify what settings page you want to open."
+                    "Please clarify which supported settings screen you want to open."
                 },
             ),
             trace = trace,

@@ -14,13 +14,17 @@ import com.phoneclaw.app.model.PlanningService
 import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.policy.PolicyEngine
+import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.skills.StaticSkillRegistry
 
 class AppGraph(
     appContext: Context,
 ) {
+    val skillRegistry: SkillRegistry = StaticSkillRegistry()
+
     private val cloudConfig = BuildConfigCloudModelConfig.fromBuildConfig()
-    private val remoteModelAdapter = HttpCloudModelAdapter(cloudConfig)
-    private val stubModelAdapter = StubCloudModelAdapter()
+    private val remoteModelAdapter = HttpCloudModelAdapter(cloudConfig, skillRegistry)
+    private val stubModelAdapter = StubCloudModelAdapter(skillRegistry)
 
     val cloudModelAdapter: CloudModelAdapter = FallbackCloudModelAdapter(
         remoteAdapter = remoteModelAdapter,
@@ -32,7 +36,7 @@ class AppGraph(
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
-    val policyEngine: PolicyEngine = DefaultPolicyEngine()
-    val actionExecutor: ActionExecutor = IntentActionExecutor(appContext)
+    val policyEngine: PolicyEngine = DefaultPolicyEngine(skillRegistry)
+    val actionExecutor: ActionExecutor = IntentActionExecutor(appContext, skillRegistry)
     val gateway: Gateway = DefaultGateway(planningService, policyEngine, actionExecutor)
 }

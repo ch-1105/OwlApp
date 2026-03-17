@@ -6,6 +6,7 @@ import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
 import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.RiskLevel
+import com.phoneclaw.app.skills.SkillRegistry
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -52,11 +53,14 @@ object BuildConfigCloudModelConfig {
 
 class HttpCloudModelAdapter(
     private val config: CloudModelConfig,
+    private val skillRegistry: SkillRegistry,
 ) : CloudModelAdapter {
     private val client = OkHttpClient.Builder()
         .connectTimeout(config.connectTimeoutSeconds, TimeUnit.SECONDS)
         .readTimeout(config.readTimeoutSeconds, TimeUnit.SECONDS)
         .build()
+
+    private val planningSystemPrompt: String = buildPlanningSystemPrompt(skillRegistry)
 
     override suspend fun planAction(request: ModelRequest): ModelResponse {
         if (!config.remoteEnabled || !request.allowCloud) {
@@ -72,7 +76,7 @@ class HttpCloudModelAdapter(
 
         return withContext(Dispatchers.IO) {
             val endpoint = config.endpointPath()
-            val requestBody = config.buildRequestBody(request).toString()
+            val requestBody = config.buildRequestBody(request, planningSystemPrompt).toString()
 
             val requestBuilder = Request.Builder()
                 .url(endpoint)
@@ -196,7 +200,10 @@ private fun CloudModelConfig.endpointPath(): String {
     }
 }
 
-private fun CloudModelConfig.buildRequestBody(request: ModelRequest): JSONObject {
+private fun CloudModelConfig.buildRequestBody(
+    request: ModelRequest,
+    planningSystemPrompt: String,
+): JSONObject {
     return when (apiStyle) {
         ModelApiStyle.PHONECLAW_GATEWAY -> JSONObject()
             .put("request_id", request.requestId)
@@ -213,7 +220,7 @@ private fun CloudModelConfig.buildRequestBody(request: ModelRequest): JSONObject
                 put(
                     JSONObject()
                         .put("role", "system")
-                        .put("content", buildPlanningSystemPrompt()),
+                        .put("content", planningSystemPrompt),
                 )
                 put(
                     JSONObject()
@@ -241,27 +248,47 @@ private fun CloudModelConfig.parseSuccessResponse(
     }
 }
 
-private fun buildPlanningSystemPrompt(): String {
+private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
+    val supportedActions = skillRegistry.allActions().joinToString("\n") { action ->
+        """
+        - action_id: ${action.action.actionId}
+          skill_id: ${action.skill.skillId}
+          display_name: ${action.action.displayName}
+          description: ${action.action.description}
+          risk_level: ${action.action.riskLevel}
+          requires_confirmation: ${action.action.requiresConfirmation}
+          executor_type: ${action.action.executorType}
+          expected_outcome: ${action.action.expectedOutcome}
+          example_utterances: ${action.action.exampleUtterances.joinToString(" | ")}
+        """.trimIndent()
+    }
+
     return """
         You are the planning model for PhoneClaw.
         Return only a JSON object with no markdown and no explanation.
-        The only supported action in this build is open_system_settings.
-        If the user is asking to open Android system settings, return:
+        Choose exactly one supported action when the user clearly asks to open that Android settings screen.
+        Supported actions in this build:
+        $supportedActions
+
+        If the user request maps clearly to one supported action, return:
         {
           "action": {
-            "action_id": "open_system_settings",
-            "skill_id": "system.settings",
-            "intent_summary": "Open Android system settings",
+            "action_id": "...",
+            "skill_id": "...",
+            "intent_summary": "...",
             "params": {},
             "risk_level": "SAFE",
             "requires_confirmation": false,
             "executor_type": "intent",
-            "expected_outcome": "System settings becomes foreground"
+            "expected_outcome": "..."
           }
         }
-        Otherwise return:
+
+        Use the exact action_id, skill_id, risk_level, requires_confirmation, executor_type, and expected_outcome from the supported action catalog.
+        Generate intent_summary as a short English summary for the chosen action.
+        If the request is not supported or ambiguous, return:
         {
-          "error": "Only open_system_settings is supported in this build.",
+          "error": "This build only supports the registered system settings actions.",
           "error_kind": "PROVIDER_REFUSED"
         }
     """.trimIndent()

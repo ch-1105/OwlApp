@@ -1,0 +1,51 @@
+# Android / Gradle
+.gradle/
+.gradle-user-home/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local Android state
+.android/
+.android-user-home/
+local.properties
+gradle-env.ps1
+
+# IDE
+.idea/
+*.iml
+.navigation/
+
+# Kotlin / JVM
+.kotlin/
+*.class
+hs_err_pid*
+replay_pid*
+
+# Signing / secrets
+*.jks
+*.keystore
+keystore.properties
+*.pem
+*.p12
+*.key
+.env
+.env.*
+
+# Packaged artifacts
+*.apk
+*.ap_
+*.aab
+*.aar
+*.dex
+*.hprof
+*.log
+
+# Docs kept local only
+doc/
+
+# OS files
+.DS_Store
+Thumbs.db

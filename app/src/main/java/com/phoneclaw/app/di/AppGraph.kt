@@ -24,7 +24,7 @@ import com.phoneclaw.app.model.FallbackCloudModelAdapter
 import com.phoneclaw.app.model.HttpCloudModelAdapter
 import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
-import com.phoneclaw.app.session.InMemorySessionStore
+import com.phoneclaw.app.session.RoomSessionStore
 import com.phoneclaw.app.skills.JsonSkillLoader
 import com.phoneclaw.app.skills.StaticSkillRegistry
 import com.phoneclaw.app.telemetry.LogcatTelemetry
@@ -70,7 +70,7 @@ class AppGraph(
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
-    val sessionPort: SessionPort = InMemorySessionStore()
+    val sessionPort: SessionPort = RoomSessionStore(database.taskDao())
     val telemetryPort: TelemetryPort = LogcatTelemetry()
     val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))
     val policyPort: PolicyPort = DefaultPolicyEngine(skillRegistry)

@@ -12,6 +12,7 @@ private const val SETTINGS_PACKAGE = "com.android.settings"
 private const val INTENT_SETTINGS = "android.settings.SETTINGS"
 private const val INTENT_WIFI_SETTINGS = "android.settings.WIFI_SETTINGS"
 private const val INTENT_BLUETOOTH_SETTINGS = "android.settings.BLUETOOTH_SETTINGS"
+private const val INTENT_NOTIFICATION_SETTINGS = "android.settings.NOTIFICATION_SETTINGS"
 private const val INTENT_VIEW = "android.intent.action.VIEW"
 
 private const val ACTION_OPEN_WEB_URL = "open_web_url"
@@ -104,6 +105,32 @@ class StaticSkillRegistry : SkillRegistry {
                 ),
             ),
             intentAction = INTENT_BLUETOOTH_SETTINGS,
+        ),
+        registeredSystemAction(
+            skillId = "system.notification_settings",
+            skillDisplayName = "Notification Settings",
+            action = SkillActionManifest(
+                actionId = "open_notification_settings",
+                displayName = "Open Notification Settings",
+                description = "Open Android notification settings",
+                executorType = "intent",
+                riskLevel = RiskLevel.SAFE,
+                requiresConfirmation = false,
+                expectedOutcome = "Android notification settings becomes foreground",
+                exampleUtterances = listOf(
+                    "open notification settings",
+                    "take me to notification settings",
+                    "打开通知设置",
+                    "带我去通知设置",
+                ),
+                matchKeywords = listOf(
+                    "notification settings",
+                    "notification",
+                    "通知设置",
+                    "通知",
+                ),
+            ),
+            intentAction = INTENT_NOTIFICATION_SETTINGS,
         ),
         registeredSystemAction(
             skillId = "system.settings",
@@ -294,3 +321,5 @@ private fun String.normalizeForMatch(): String {
         .replace("_", "")
         .replace(" ", "")
 }
+
+

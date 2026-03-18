@@ -69,21 +69,22 @@ class DefaultPolicyEngineTest {
     }
 
     @Test
-    fun rejectsUnregisteredAction() {
+    fun rejectsUnknownAction() {
         val decision = policyEngine.review(
             ActionSpec(
-                actionId = "open_notification_settings",
-                skillId = "system.notification_settings",
+                actionId = "open_unknown_settings",
+                skillId = "system.unknown_settings",
                 taskId = "task-4",
-                intentSummary = "Open Android notification settings",
+                intentSummary = "Open unknown settings",
                 params = emptyMap(),
                 riskLevel = RiskLevel.SAFE,
                 requiresConfirmation = false,
                 executorType = "intent",
-                expectedOutcome = "Android notification settings becomes foreground",
+                expectedOutcome = "Unknown settings becomes foreground",
             ),
         )
 
         assertFalse(decision.allowed)
     }
 }
+

@@ -32,6 +32,14 @@ class StaticSkillRegistryTest {
     }
 
     @Test
+    fun matchesNotificationSettingsPrompt() {
+        val action = registry.matchUserMessage("打开通知设置")
+
+        assertNotNull(action)
+        assertEquals("open_notification_settings", action?.actionId)
+    }
+
+    @Test
     fun matchesBrowserOpenActionWhenUrlIsPresent() {
         val action = registry.matchUserMessage("打开 https://openai.com")
 
@@ -47,3 +55,4 @@ class StaticSkillRegistryTest {
         assertEquals("fetch_web_page_content", action?.actionId)
     }
 }
+

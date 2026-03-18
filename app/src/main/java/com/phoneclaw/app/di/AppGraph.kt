@@ -7,6 +7,7 @@ import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.SessionPort
+import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
 import com.phoneclaw.app.model.CloudModelAdapter
 import com.phoneclaw.app.model.DefaultPlanningService
@@ -18,6 +19,7 @@ import com.phoneclaw.app.policy.PolicyEngine
 import com.phoneclaw.app.session.InMemorySessionStore
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.skills.StaticSkillRegistry
+import com.phoneclaw.app.telemetry.LogcatTelemetry
 
 class AppGraph(
     appContext: Context,
@@ -39,6 +41,7 @@ class AppGraph(
         preferredProvider = cloudConfig.provider,
     )
     val sessionPort: SessionPort = InMemorySessionStore()
+    val telemetryPort: TelemetryPort = LogcatTelemetry()
     val policyEngine: PolicyEngine = DefaultPolicyEngine(skillRegistry)
     val actionExecutor: ActionExecutor = IntentActionExecutor(appContext, skillRegistry)
     val gateway: Gateway = DefaultGateway(
@@ -46,5 +49,6 @@ class AppGraph(
         policyEngine = policyEngine,
         actionExecutor = actionExecutor,
         sessionPort = sessionPort,
+        telemetryPort = telemetryPort,
     )
 }

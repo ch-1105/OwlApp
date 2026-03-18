@@ -11,7 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StaticSkillRegistryTest {
-    private val registry = StaticSkillRegistry()
+    private val registry = bundledSkillRegistryForTests()
 
     @Test
     fun matchesWifiBeforeGenericSettings() {

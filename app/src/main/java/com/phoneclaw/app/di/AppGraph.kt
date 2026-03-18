@@ -31,12 +31,16 @@ import java.io.File
 class AppGraph(
     appContext: Context,
 ) {
-    val skillRegistry: SkillRegistryPort = JsonSkillLoader
+    private val bundledRegisteredActions = JsonSkillLoader
         .fromAssets(appContext.assets)
         .loadRegisteredActions()
-        .takeIf { it.isNotEmpty() }
-        ?.let { loadedActions -> StaticSkillRegistry(loadedActions) }
-        ?: StaticSkillRegistry()
+        .also { loadedActions ->
+            require(loadedActions.isNotEmpty()) {
+                "No bundled skills were loaded from assets/skills."
+            }
+        }
+
+    val skillRegistry: SkillRegistryPort = StaticSkillRegistry(bundledRegisteredActions)
 
     private val cloudConfig = BuildConfigCloudModelConfig.fromBuildConfig()
     private val remoteModelAdapter = HttpCloudModelAdapter(cloudConfig, skillRegistry)

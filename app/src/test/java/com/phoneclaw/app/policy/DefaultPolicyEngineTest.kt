@@ -2,13 +2,13 @@ package com.phoneclaw.app.policy
 
 import com.phoneclaw.app.contracts.ActionSpec
 import com.phoneclaw.app.contracts.RiskLevel
-import com.phoneclaw.app.skills.StaticSkillRegistry
+import com.phoneclaw.app.skills.bundledSkillRegistryForTests
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DefaultPolicyEngineTest {
-    private val registry = StaticSkillRegistry()
+    private val registry = bundledSkillRegistryForTests()
     private val policyEngine = DefaultPolicyEngine(registry)
 
     @Test
@@ -87,4 +87,3 @@ class DefaultPolicyEngineTest {
         assertFalse(decision.allowed)
     }
 }
-

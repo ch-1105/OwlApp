@@ -2,22 +2,14 @@ package com.phoneclaw.app.policy
 
 import com.phoneclaw.app.contracts.ActionSpec
 import com.phoneclaw.app.contracts.RiskLevel
+import com.phoneclaw.app.gateway.ports.PolicyDecision
+import com.phoneclaw.app.gateway.ports.PolicyPort
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.web.normalizeWebUrl
 
-data class PolicyDecision(
-    val allowed: Boolean,
-    val requiresConfirmation: Boolean,
-    val reason: String? = null,
-)
-
-interface PolicyEngine {
-    fun review(actionSpec: ActionSpec): PolicyDecision
-}
-
 class DefaultPolicyEngine(
     private val skillRegistry: SkillRegistry,
-) : PolicyEngine {
+) : PolicyPort {
     override fun review(actionSpec: ActionSpec): PolicyDecision {
         val registeredAction = skillRegistry.findAction(actionSpec.actionId)
             ?: return PolicyDecision(

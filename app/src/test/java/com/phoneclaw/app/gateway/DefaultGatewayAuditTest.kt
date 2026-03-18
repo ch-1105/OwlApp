@@ -7,14 +7,14 @@ import com.phoneclaw.app.contracts.PlanningTrace
 import com.phoneclaw.app.contracts.RiskLevel
 import com.phoneclaw.app.contracts.TaskState
 import com.phoneclaw.app.contracts.VerificationResult
-import com.phoneclaw.app.executor.ActionExecutor
 import com.phoneclaw.app.gateway.ports.AuditPort
+import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.gateway.ports.PlannerOutcome
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PlannerResult
+import com.phoneclaw.app.gateway.ports.PolicyDecision
+import com.phoneclaw.app.gateway.ports.PolicyPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
-import com.phoneclaw.app.policy.PolicyDecision
-import com.phoneclaw.app.policy.PolicyEngine
 import com.phoneclaw.app.session.InMemorySessionStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -28,8 +28,8 @@ class DefaultGatewayAuditTest {
         val sessionPort = InMemorySessionStore()
         val gateway = DefaultGateway(
             plannerPort = FakePlannerPort(),
-            policyEngine = FakePolicyEngine(),
-            actionExecutor = FakeActionExecutor(),
+            policyPort = FakePolicyPort(),
+            executorPort = FakeExecutorPort(),
             sessionPort = sessionPort,
             telemetryPort = NoOpTelemetryPort(),
             auditPort = auditPort,
@@ -84,7 +84,7 @@ class DefaultGatewayAuditTest {
         ): String? = null
     }
 
-    private class FakePolicyEngine : PolicyEngine {
+    private class FakePolicyPort : PolicyPort {
         override fun review(actionSpec: ActionSpec): PolicyDecision {
             return PolicyDecision(
                 allowed = true,
@@ -93,7 +93,7 @@ class DefaultGatewayAuditTest {
         }
     }
 
-    private class FakeActionExecutor : ActionExecutor {
+    private class FakeExecutorPort : ExecutorPort {
         override suspend fun execute(request: ExecutionRequest): ExecutionResult {
             return ExecutionResult(
                 requestId = request.requestId,

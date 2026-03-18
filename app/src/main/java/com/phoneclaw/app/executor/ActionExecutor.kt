@@ -6,6 +6,7 @@ import android.net.Uri
 import com.phoneclaw.app.contracts.ExecutionRequest
 import com.phoneclaw.app.contracts.ExecutionResult
 import com.phoneclaw.app.contracts.VerificationResult
+import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.web.extractHtmlTitle
 import com.phoneclaw.app.web.extractReadableText
@@ -15,14 +16,10 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-interface ActionExecutor {
-    suspend fun execute(request: ExecutionRequest): ExecutionResult
-}
-
 class IntentActionExecutor(
     private val appContext: Context,
     private val skillRegistry: SkillRegistry,
-) : ActionExecutor {
+) : ExecutorPort {
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)

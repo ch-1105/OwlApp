@@ -6,15 +6,15 @@ import com.phoneclaw.app.contracts.ExecutionResult
 import com.phoneclaw.app.contracts.PlanningTrace
 import com.phoneclaw.app.contracts.TaskSnapshot
 import com.phoneclaw.app.contracts.TaskState
-import com.phoneclaw.app.executor.ActionExecutor
 import com.phoneclaw.app.gateway.ports.AuditPort
+import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.gateway.ports.PlannerOutcome
 import com.phoneclaw.app.gateway.ports.PlannerPort
+import com.phoneclaw.app.gateway.ports.PolicyPort
 import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.gateway.ports.TaskEvent
 import com.phoneclaw.app.gateway.ports.TaskEventType
 import com.phoneclaw.app.gateway.ports.TelemetryPort
-import com.phoneclaw.app.policy.PolicyEngine
 import java.util.UUID
 
 private const val DEFAULT_SESSION_ID = "default"
@@ -26,8 +26,8 @@ interface Gateway {
 
 class DefaultGateway(
     private val plannerPort: PlannerPort,
-    private val policyEngine: PolicyEngine,
-    private val actionExecutor: ActionExecutor,
+    private val policyPort: PolicyPort,
+    private val executorPort: ExecutorPort,
     private val sessionPort: SessionPort,
     private val telemetryPort: TelemetryPort,
     private val auditPort: AuditPort,
@@ -105,7 +105,7 @@ class DefaultGateway(
                     ),
                 )
 
-                val decision = policyEngine.review(outcome.actionSpec)
+                val decision = policyPort.review(outcome.actionSpec)
                 if (!decision.allowed) {
                     transitionTask(taskId, traceId, TaskState.REFUSED)
                     sessionPort.appendTaskEvent(
@@ -165,7 +165,7 @@ class DefaultGateway(
                         taskId = taskId,
                         actionSpec = outcome.actionSpec,
                     )
-                    val rawResult = actionExecutor.execute(executionRequest)
+                    val rawResult = executorPort.execute(executionRequest)
                     val result = maybeSummarizeWebContent(taskId, traceId, userMessage, rawResult)
 
                     sessionPort.storeExecutionResult(taskId, result)
@@ -345,3 +345,4 @@ class DefaultGateway(
             )
     }
 }
+

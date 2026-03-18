@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class SkillEntity(
     @PrimaryKey val skillId: String,
     val manifestJson: String,
+    val bindingsJson: String = "[]",
     val source: String,
     val enabled: Boolean,
     val reviewStatus: String,

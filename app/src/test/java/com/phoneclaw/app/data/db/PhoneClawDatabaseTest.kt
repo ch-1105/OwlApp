@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.robolectric.annotation.Config
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -13,6 +12,7 @@ import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -60,6 +60,7 @@ class PhoneClawDatabaseTest {
         val skill = SkillEntity(
             skillId = "browser.web",
             manifestJson = "{}",
+            bindingsJson = "[]",
             source = "builtin",
             enabled = true,
             reviewStatus = "approved",
@@ -103,4 +104,3 @@ class PhoneClawDatabaseTest {
         assertNull(database.authorizedAppDao().getById(app.packageName))
     }
 }
-

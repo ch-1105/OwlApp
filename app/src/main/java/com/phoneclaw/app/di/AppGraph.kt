@@ -3,6 +3,8 @@ package com.phoneclaw.app.di
 import android.content.Context
 import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
+import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
+import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_1_2
 import com.phoneclaw.app.data.db.PhoneClawDatabase
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.gateway.DefaultGateway
@@ -26,7 +28,9 @@ import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.session.RoomSessionStore
 import com.phoneclaw.app.skills.JsonSkillLoader
-import com.phoneclaw.app.skills.StaticSkillRegistry
+import com.phoneclaw.app.skills.StoreBackedSkillRegistry
+import com.phoneclaw.app.store.RoomSkillStore
+import com.phoneclaw.app.store.SkillStore
 import com.phoneclaw.app.telemetry.LogcatTelemetry
 import java.io.File
 
@@ -36,19 +40,24 @@ class AppGraph(
     val database: PhoneClawDatabase = Room.databaseBuilder(
         appContext,
         PhoneClawDatabase::class.java,
-        "phoneclaw.db",
-    ).build()
+        PHONECLAW_DATABASE_NAME,
+    )
+        .addMigrations(PHONECLAW_DB_MIGRATION_1_2)
+        .build()
 
-    private val bundledRegisteredActions = JsonSkillLoader
-        .fromAssets(appContext.assets)
-        .loadRegisteredActions()
-        .also { loadedActions ->
-            require(loadedActions.isNotEmpty()) {
+    private val builtinSkillLoader = JsonSkillLoader.fromAssets(appContext.assets)
+    private val bundledSkillPackages = builtinSkillLoader.loadSkillPackages()
+        .also { loadedSkills ->
+            require(loadedSkills.isNotEmpty()) {
                 "No bundled skills were loaded from assets/skills."
             }
         }
 
-    val skillRegistry: SkillRegistryPort = StaticSkillRegistry(bundledRegisteredActions)
+    val skillStore: SkillStore = RoomSkillStore(
+        skillDao = database.skillDao(),
+        builtinLoader = builtinSkillLoader,
+    )
+    val skillRegistry: SkillRegistryPort = StoreBackedSkillRegistry(skillStore)
 
     private val cloudConfig = BuildConfigCloudModelConfig.fromBuildConfig()
     private val remoteModelAdapter = HttpCloudModelAdapter(cloudConfig, skillRegistry)

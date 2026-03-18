@@ -1,0 +1,178 @@
+package com.phoneclaw.app.store
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.phoneclaw.app.contracts.CONTRACT_SCHEMA_VERSION
+import com.phoneclaw.app.contracts.RiskLevel
+import com.phoneclaw.app.contracts.SkillActionManifest
+import com.phoneclaw.app.contracts.SkillManifest
+import com.phoneclaw.app.data.db.PhoneClawDatabase
+import com.phoneclaw.app.skills.JsonSkillLoader
+import com.phoneclaw.app.skills.SkillActionBinding
+import com.phoneclaw.app.skills.StoreBackedSkillRegistry
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import java.io.File
+import java.nio.file.Files
+
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
+class RoomSkillStoreTest {
+    private lateinit var database: PhoneClawDatabase
+    private lateinit var rootDir: File
+    private lateinit var store: RoomSkillStore
+
+    @Before
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, PhoneClawDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        rootDir = Files.createTempDirectory("phoneclaw-skill-store").toFile()
+        writeBuiltinSkillPackage(rootDir)
+        store = RoomSkillStore(
+            skillDao = database.skillDao(),
+            builtinLoader = JsonSkillLoader.fromDirectory(rootDir),
+            clock = { 1234L },
+        )
+    }
+
+    @After
+    fun tearDown() {
+        database.close()
+        rootDir.deleteRecursively()
+    }
+
+    @Test
+    fun loadAllEnabledActions_mergesBuiltinAndLearnedSkills() {
+        assertEquals(setOf("open_builtin_settings"), store.loadAllEnabledActions().map { it.actionId }.toSet())
+
+        store.saveLearnedSkill(
+            manifest = learnedManifest(enabled = true),
+            bindings = listOf(
+                SkillActionBinding(
+                    actionId = "open_learned_page",
+                    intentAction = "android.intent.action.VIEW",
+                ),
+            ),
+        )
+
+        val actionIds = store.loadAllEnabledActions().map { it.actionId }.toSet()
+        assertEquals(
+            setOf("open_builtin_settings", "open_learned_page"),
+            actionIds,
+        )
+
+        val registry = StoreBackedSkillRegistry(store)
+        assertNotNull(registry.findAction("open_learned_page"))
+
+        val learnedRecord = store.loadAllSkills().first { it.skillId == "sample.learned" }
+        assertEquals(SKILL_SOURCE_LEARNED, learnedRecord.source)
+        assertEquals(SKILL_REVIEW_PENDING, learnedRecord.reviewStatus)
+    }
+
+    @Test
+    fun setSkillEnabled_persistsBuiltinOverrides() {
+        store.setSkillEnabled("sample.builtin", enabled = false)
+
+        assertEquals(emptyList<String>(), store.loadAllEnabledActions().map { it.actionId })
+
+        val builtinRecord = store.loadAllSkills().first { it.skillId == "sample.builtin" }
+        assertEquals(false, builtinRecord.enabled)
+        assertEquals(SKILL_SOURCE_BUILTIN, builtinRecord.source)
+    }
+
+    @Test
+    fun updateReviewStatus_updatesStoredSkillMetadata() {
+        store.saveLearnedSkill(
+            manifest = learnedManifest(enabled = true),
+            bindings = listOf(
+                SkillActionBinding(
+                    actionId = "open_learned_page",
+                    intentAction = "android.intent.action.VIEW",
+                ),
+            ),
+        )
+
+        store.updateReviewStatus("sample.learned", SKILL_REVIEW_APPROVED)
+
+        val learnedRecord = store.loadAllSkills().first { it.skillId == "sample.learned" }
+        assertEquals(SKILL_REVIEW_APPROVED, learnedRecord.reviewStatus)
+    }
+}
+
+private fun writeBuiltinSkillPackage(rootDir: File) {
+    val skillsDir = File(rootDir, "skills").apply { mkdirs() }
+    File(skillsDir, "builtin.json").writeText(
+        """
+        {
+          "skill": {
+            "schema_version": "v1alpha1",
+            "skill_id": "sample.builtin",
+            "skill_version": "0.1.0",
+            "skill_type": "system",
+            "display_name": "Builtin Settings Skill",
+            "owner": "test",
+            "platform": "android",
+            "app_package": "com.android.settings",
+            "default_risk_level": "safe",
+            "enabled": true,
+            "actions": [
+              {
+                "action_id": "open_builtin_settings",
+                "display_name": "Open Builtin Settings",
+                "description": "Open builtin settings",
+                "executor_type": "intent",
+                "risk_level": "safe",
+                "requires_confirmation": false,
+                "expected_outcome": "Builtin settings opens",
+                "example_utterances": ["open builtin settings"],
+                "match_keywords": ["builtin"]
+              }
+            ]
+          },
+          "action_bindings": [
+            {
+              "action_id": "open_builtin_settings",
+              "intent_action": "android.settings.SETTINGS"
+            }
+          ]
+        }
+        """.trimIndent(),
+    )
+}
+
+private fun learnedManifest(enabled: Boolean): SkillManifest {
+    return SkillManifest(
+        schemaVersion = CONTRACT_SCHEMA_VERSION,
+        skillId = "sample.learned",
+        skillVersion = "0.1.0",
+        skillType = "single_app",
+        displayName = "Learned Skill",
+        owner = "phoneclaw",
+        platform = "android",
+        appPackage = "com.example.learned",
+        defaultRiskLevel = RiskLevel.SAFE,
+        enabled = enabled,
+        actions = listOf(
+            SkillActionManifest(
+                actionId = "open_learned_page",
+                displayName = "Open Learned Page",
+                description = "Open the learned page",
+                executorType = "intent",
+                riskLevel = RiskLevel.SAFE,
+                requiresConfirmation = false,
+                expectedOutcome = "The learned page is foregrounded",
+                exampleUtterances = listOf("open learned page"),
+                matchKeywords = listOf("learned"),
+            ),
+        ),
+    )
+}

@@ -27,7 +27,9 @@ import com.phoneclaw.app.model.HttpCloudModelAdapter
 import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.scanner.AppScanner
+import com.phoneclaw.app.scanner.AuthorizationManager
 import com.phoneclaw.app.scanner.PackageManagerAppScanner
+import com.phoneclaw.app.scanner.RoomAuthorizationManager
 import com.phoneclaw.app.session.RoomSessionStore
 import com.phoneclaw.app.skills.JsonSkillLoader
 import com.phoneclaw.app.skills.StoreBackedSkillRegistry
@@ -83,6 +85,7 @@ class AppGraph(
     )
     val sessionPort: SessionPort = RoomSessionStore(database.taskDao())
     val appScanner: AppScanner = PackageManagerAppScanner(appContext)
+    val authorizationManager: AuthorizationManager = RoomAuthorizationManager(database.authorizedAppDao())
     val telemetryPort: TelemetryPort = LogcatTelemetry()
     val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))
     val policyPort: PolicyPort = DefaultPolicyEngine(skillRegistry)

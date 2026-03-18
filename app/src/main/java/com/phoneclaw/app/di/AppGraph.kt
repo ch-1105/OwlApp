@@ -1,10 +1,12 @@
 package com.phoneclaw.app.di
 
 import android.content.Context
+import com.phoneclaw.app.audit.FileAuditTrail
 import com.phoneclaw.app.executor.ActionExecutor
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
+import com.phoneclaw.app.gateway.ports.AuditPort
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
@@ -20,6 +22,7 @@ import com.phoneclaw.app.session.InMemorySessionStore
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.skills.StaticSkillRegistry
 import com.phoneclaw.app.telemetry.LogcatTelemetry
+import java.io.File
 
 class AppGraph(
     appContext: Context,
@@ -42,6 +45,7 @@ class AppGraph(
     )
     val sessionPort: SessionPort = InMemorySessionStore()
     val telemetryPort: TelemetryPort = LogcatTelemetry()
+    val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))
     val policyEngine: PolicyEngine = DefaultPolicyEngine(skillRegistry)
     val actionExecutor: ActionExecutor = IntentActionExecutor(appContext, skillRegistry)
     val gateway: Gateway = DefaultGateway(
@@ -50,5 +54,6 @@ class AppGraph(
         actionExecutor = actionExecutor,
         sessionPort = sessionPort,
         telemetryPort = telemetryPort,
+        auditPort = auditPort,
     )
 }

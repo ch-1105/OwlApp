@@ -7,6 +7,7 @@ import com.phoneclaw.app.contracts.PlanningTrace
 import com.phoneclaw.app.contracts.TaskSnapshot
 import com.phoneclaw.app.contracts.TaskState
 import com.phoneclaw.app.executor.ActionExecutor
+import com.phoneclaw.app.gateway.ports.AuditPort
 import com.phoneclaw.app.gateway.ports.PlannerOutcome
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.SessionPort
@@ -29,9 +30,11 @@ class DefaultGateway(
     private val actionExecutor: ActionExecutor,
     private val sessionPort: SessionPort,
     private val telemetryPort: TelemetryPort,
+    private val auditPort: AuditPort,
 ) : Gateway {
     override suspend fun submitUserMessage(userMessage: String): TaskSnapshot {
         val taskId = sessionPort.createTask(DEFAULT_SESSION_ID, userMessage)
+        val traceId = UUID.randomUUID().toString()
         telemetryPort.recordTaskEvent(
             taskId = taskId,
             eventType = "task_created",
@@ -40,8 +43,17 @@ class DefaultGateway(
                 "user_message" to userMessage,
             ),
         )
+        auditPort.recordTaskEvent(
+            taskId = taskId,
+            traceId = traceId,
+            eventType = "task_created",
+            payload = mapOf(
+                "session_id" to DEFAULT_SESSION_ID,
+                "user_message" to userMessage,
+            ),
+        )
 
-        transitionTask(taskId, TaskState.PLANNING)
+        transitionTask(taskId, traceId, TaskState.PLANNING)
 
         val planning = plannerPort.planAction(taskId, userMessage)
         sessionPort.appendTaskEvent(
@@ -52,6 +64,17 @@ class DefaultGateway(
             ),
         )
         telemetryPort.recordModelTrace(taskId, planning.trace)
+        auditPort.recordTaskEvent(
+            taskId = taskId,
+            traceId = traceId,
+            eventType = "planning_completed",
+            payload = mapOf(
+                "provider" to planning.trace.provider,
+                "model_id" to planning.trace.modelId,
+                "used_remote" to planning.trace.usedRemote.toString(),
+            ),
+        )
+        auditPort.recordModelTrace(taskId, traceId, planning.trace)
 
         return when (val outcome = planning.outcome) {
             is PlannerOutcome.PlannedAction -> {
@@ -71,10 +94,20 @@ class DefaultGateway(
                         "risk_level" to outcome.actionSpec.riskLevel.name,
                     ),
                 )
+                auditPort.recordTaskEvent(
+                    taskId = taskId,
+                    traceId = traceId,
+                    eventType = "action_planned",
+                    payload = mapOf(
+                        "action_id" to outcome.actionSpec.actionId,
+                        "skill_id" to outcome.actionSpec.skillId,
+                        "risk_level" to outcome.actionSpec.riskLevel.name,
+                    ),
+                )
 
                 val decision = policyEngine.review(outcome.actionSpec)
                 if (!decision.allowed) {
-                    transitionTask(taskId, TaskState.REFUSED)
+                    transitionTask(taskId, traceId, TaskState.REFUSED)
                     sessionPort.appendTaskEvent(
                         taskId = taskId,
                         event = TaskEvent(
@@ -84,6 +117,14 @@ class DefaultGateway(
                     )
                     telemetryPort.recordTaskEvent(
                         taskId = taskId,
+                        eventType = "policy_refused",
+                        payload = mapOf(
+                            "reason" to (decision.reason ?: ""),
+                        ),
+                    )
+                    auditPort.recordTaskEvent(
+                        taskId = taskId,
+                        traceId = traceId,
                         eventType = "policy_refused",
                         payload = mapOf(
                             "reason" to (decision.reason ?: ""),
@@ -105,11 +146,19 @@ class DefaultGateway(
                             "requires_confirmation" to decision.requiresConfirmation.toString(),
                         ),
                     )
+                    auditPort.recordTaskEvent(
+                        taskId = taskId,
+                        traceId = traceId,
+                        eventType = "policy_allowed",
+                        payload = mapOf(
+                            "requires_confirmation" to decision.requiresConfirmation.toString(),
+                        ),
+                    )
                     if (decision.requiresConfirmation) {
-                        transitionTask(taskId, TaskState.AWAITING_CONFIRMATION)
+                        transitionTask(taskId, traceId, TaskState.AWAITING_CONFIRMATION)
                     }
-                    transitionTask(taskId, TaskState.APPROVED)
-                    transitionTask(taskId, TaskState.EXECUTING)
+                    transitionTask(taskId, traceId, TaskState.APPROVED)
+                    transitionTask(taskId, traceId, TaskState.EXECUTING)
 
                     val executionRequest = ExecutionRequest(
                         requestId = UUID.randomUUID().toString(),
@@ -117,7 +166,7 @@ class DefaultGateway(
                         actionSpec = outcome.actionSpec,
                     )
                     val rawResult = actionExecutor.execute(executionRequest)
-                    val result = maybeSummarizeWebContent(taskId, userMessage, rawResult)
+                    val result = maybeSummarizeWebContent(taskId, traceId, userMessage, rawResult)
 
                     sessionPort.storeExecutionResult(taskId, result)
                     sessionPort.appendTaskEvent(
@@ -132,9 +181,10 @@ class DefaultGateway(
                         ),
                     )
                     telemetryPort.recordExecutionTrace(taskId, result)
+                    auditPort.recordExecutionTrace(taskId, traceId, result)
 
                     val finalState = if (result.status == "success") TaskState.SUCCEEDED else TaskState.FAILED
-                    transitionTask(taskId, finalState)
+                    transitionTask(taskId, traceId, finalState)
 
                     loadSnapshotOrFallback(
                         taskId = taskId,
@@ -149,7 +199,7 @@ class DefaultGateway(
             }
 
             is PlannerOutcome.ClarificationNeeded -> {
-                transitionTask(taskId, TaskState.FAILED)
+                transitionTask(taskId, traceId, TaskState.FAILED)
                 sessionPort.appendTaskEvent(
                     taskId = taskId,
                     event = TaskEvent(
@@ -159,6 +209,14 @@ class DefaultGateway(
                 )
                 telemetryPort.recordTaskEvent(
                     taskId = taskId,
+                    eventType = "clarification_needed",
+                    payload = mapOf(
+                        "question" to outcome.question,
+                    ),
+                )
+                auditPort.recordTaskEvent(
+                    taskId = taskId,
+                    traceId = traceId,
                     eventType = "clarification_needed",
                     payload = mapOf(
                         "question" to outcome.question,
@@ -174,7 +232,7 @@ class DefaultGateway(
             }
 
             is PlannerOutcome.Refused -> {
-                transitionTask(taskId, TaskState.REFUSED)
+                transitionTask(taskId, traceId, TaskState.REFUSED)
                 sessionPort.appendTaskEvent(
                     taskId = taskId,
                     event = TaskEvent(
@@ -184,6 +242,14 @@ class DefaultGateway(
                 )
                 telemetryPort.recordTaskEvent(
                     taskId = taskId,
+                    eventType = "planner_refused",
+                    payload = mapOf(
+                        "reason" to outcome.reason,
+                    ),
+                )
+                auditPort.recordTaskEvent(
+                    taskId = taskId,
+                    traceId = traceId,
                     eventType = "planner_refused",
                     payload = mapOf(
                         "reason" to outcome.reason,
@@ -202,6 +268,7 @@ class DefaultGateway(
 
     private suspend fun maybeSummarizeWebContent(
         taskId: String,
+        traceId: String,
         userMessage: String,
         result: ExecutionResult,
     ): ExecutionResult {
@@ -224,16 +291,32 @@ class DefaultGateway(
                 "summary_length" to summary.length.toString(),
             ),
         )
+        auditPort.recordTaskEvent(
+            taskId = taskId,
+            traceId = traceId,
+            eventType = "web_content_summarized",
+            payload = mapOf(
+                "summary_length" to summary.length.toString(),
+            ),
+        )
 
         return result.copy(
             outputData = result.outputData + ("ai_summary" to summary),
         )
     }
 
-    private fun transitionTask(taskId: String, state: TaskState) {
+    private fun transitionTask(taskId: String, traceId: String, state: TaskState) {
         sessionPort.updateTaskState(taskId, state)
         telemetryPort.recordTaskEvent(
             taskId = taskId,
+            eventType = "state_changed",
+            payload = mapOf(
+                "state" to state.name,
+            ),
+        )
+        auditPort.recordTaskEvent(
+            taskId = taskId,
+            traceId = traceId,
             eventType = "state_changed",
             payload = mapOf(
                 "state" to state.name,

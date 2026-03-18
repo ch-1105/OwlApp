@@ -1,0 +1,44 @@
+{
+  "skill": {
+    "schema_version": "v1alpha1",
+    "skill_id": "system.notification_settings",
+    "skill_version": "0.1.0",
+    "skill_type": "system",
+    "display_name": "Notification Settings",
+    "owner": "core",
+    "platform": "android",
+    "app_package": "com.android.settings",
+    "default_risk_level": "safe",
+    "enabled": true,
+    "actions": [
+      {
+        "action_id": "open_notification_settings",
+        "display_name": "Open Notification Settings",
+        "description": "Open Android notification settings",
+        "executor_type": "intent",
+        "risk_level": "safe",
+        "requires_confirmation": false,
+        "expected_outcome": "Android notification settings becomes foreground",
+        "enabled": true,
+        "example_utterances": [
+          "open notification settings",
+          "take me to notification settings",
+          "打开通知设置",
+          "带我去通知设置"
+        ],
+        "match_keywords": [
+          "notification settings",
+          "notification",
+          "通知设置",
+          "通知"
+        ]
+      }
+    ]
+  },
+  "action_bindings": [
+    {
+      "action_id": "open_notification_settings",
+      "intent_action": "android.settings.NOTIFICATION_SETTINGS"
+    }
+  ]
+}

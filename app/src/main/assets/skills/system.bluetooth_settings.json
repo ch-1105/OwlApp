@@ -1,0 +1,44 @@
+{
+  "skill": {
+    "schema_version": "v1alpha1",
+    "skill_id": "system.bluetooth_settings",
+    "skill_version": "0.1.0",
+    "skill_type": "system",
+    "display_name": "Bluetooth Settings",
+    "owner": "core",
+    "platform": "android",
+    "app_package": "com.android.settings",
+    "default_risk_level": "safe",
+    "enabled": true,
+    "actions": [
+      {
+        "action_id": "open_bluetooth_settings",
+        "display_name": "Open Bluetooth Settings",
+        "description": "Open Android Bluetooth settings",
+        "executor_type": "intent",
+        "risk_level": "safe",
+        "requires_confirmation": false,
+        "expected_outcome": "Android Bluetooth settings becomes foreground",
+        "enabled": true,
+        "example_utterances": [
+          "open bluetooth settings",
+          "take me to bluetooth settings",
+          "打开蓝牙设置",
+          "带我去蓝牙设置"
+        ],
+        "match_keywords": [
+          "bluetooth settings",
+          "bluetooth",
+          "蓝牙设置",
+          "蓝牙"
+        ]
+      }
+    ]
+  },
+  "action_bindings": [
+    {
+      "action_id": "open_bluetooth_settings",
+      "intent_action": "android.settings.BLUETOOTH_SETTINGS"
+    }
+  ]
+}

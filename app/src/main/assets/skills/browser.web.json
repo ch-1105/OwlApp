@@ -1,0 +1,74 @@
+{
+  "skill": {
+    "schema_version": "v1alpha1",
+    "skill_id": "browser.web",
+    "skill_version": "0.1.0",
+    "skill_type": "browser",
+    "display_name": "Browser Tools",
+    "owner": "core",
+    "platform": "android",
+    "app_package": null,
+    "default_risk_level": "safe",
+    "enabled": true,
+    "actions": [
+      {
+        "action_id": "open_web_url",
+        "display_name": "Open Web URL",
+        "description": "Open a web page in the default browser",
+        "executor_type": "browser_intent",
+        "risk_level": "safe",
+        "requires_confirmation": false,
+        "expected_outcome": "The target URL becomes foreground in the default browser",
+        "enabled": true,
+        "example_utterances": [
+          "open https://openai.com",
+          "在浏览器打开 https://example.com",
+          "打开网页 https://news.ycombinator.com"
+        ],
+        "match_keywords": [
+          "openwebsite",
+          "openwebpage",
+          "openurl",
+          "打开网页",
+          "打开网站",
+          "浏览器打开"
+        ]
+      },
+      {
+        "action_id": "fetch_web_page_content",
+        "display_name": "Fetch Web Page Content",
+        "description": "Fetch the readable text content of a web page",
+        "executor_type": "web_fetch",
+        "risk_level": "safe",
+        "requires_confirmation": false,
+        "expected_outcome": "PhoneClaw returns the page title and readable text content",
+        "enabled": true,
+        "example_utterances": [
+          "fetch https://example.com content",
+          "读取 https://openai.com 的网页内容",
+          "帮我获取 https://openai.com 的内容"
+        ],
+        "match_keywords": [
+          "fetchwebpage",
+          "readwebpage",
+          "webpagecontent",
+          "网页内容",
+          "读取网页",
+          "获取网页内容",
+          "抓取网页",
+          "网页正文"
+        ]
+      }
+    ]
+  },
+  "action_bindings": [
+    {
+      "action_id": "open_web_url",
+      "intent_action": "android.intent.action.VIEW"
+    },
+    {
+      "action_id": "fetch_web_page_content",
+      "intent_action": ""
+    }
+  ]
+}

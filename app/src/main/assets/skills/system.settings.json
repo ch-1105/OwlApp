@@ -1,0 +1,45 @@
+{
+  "skill": {
+    "schema_version": "v1alpha1",
+    "skill_id": "system.settings",
+    "skill_version": "0.1.0",
+    "skill_type": "system",
+    "display_name": "System Settings",
+    "owner": "core",
+    "platform": "android",
+    "app_package": "com.android.settings",
+    "default_risk_level": "safe",
+    "enabled": true,
+    "actions": [
+      {
+        "action_id": "open_system_settings",
+        "display_name": "Open System Settings",
+        "description": "Open Android system settings",
+        "executor_type": "intent",
+        "risk_level": "safe",
+        "requires_confirmation": false,
+        "expected_outcome": "Android settings activity is foregrounded",
+        "enabled": true,
+        "example_utterances": [
+          "open system settings",
+          "take me to settings",
+          "打开系统设置",
+          "带我去设置页",
+          "我想进系统设置"
+        ],
+        "match_keywords": [
+          "system settings",
+          "system setting",
+          "settings",
+          "设置"
+        ]
+      }
+    ]
+  },
+  "action_bindings": [
+    {
+      "action_id": "open_system_settings",
+      "intent_action": "android.settings.SETTINGS"
+    }
+  ]
+}

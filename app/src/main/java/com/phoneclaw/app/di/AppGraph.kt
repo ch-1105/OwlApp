@@ -19,6 +19,7 @@ import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.policy.PolicyEngine
 import com.phoneclaw.app.session.InMemorySessionStore
+import com.phoneclaw.app.skills.JsonSkillLoader
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.skills.StaticSkillRegistry
 import com.phoneclaw.app.telemetry.LogcatTelemetry
@@ -27,7 +28,12 @@ import java.io.File
 class AppGraph(
     appContext: Context,
 ) {
-    val skillRegistry: SkillRegistry = StaticSkillRegistry()
+    val skillRegistry: SkillRegistry = JsonSkillLoader
+        .fromAssets(appContext.assets)
+        .loadRegisteredActions()
+        .takeIf { it.isNotEmpty() }
+        ?.let { loadedActions -> StaticSkillRegistry(loadedActions) }
+        ?: StaticSkillRegistry()
 
     private val cloudConfig = BuildConfigCloudModelConfig.fromBuildConfig()
     private val remoteModelAdapter = HttpCloudModelAdapter(cloudConfig, skillRegistry)

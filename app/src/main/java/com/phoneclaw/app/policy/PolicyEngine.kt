@@ -4,11 +4,11 @@ import com.phoneclaw.app.contracts.ActionSpec
 import com.phoneclaw.app.contracts.RiskLevel
 import com.phoneclaw.app.gateway.ports.PolicyDecision
 import com.phoneclaw.app.gateway.ports.PolicyPort
-import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.web.normalizeWebUrl
 
 class DefaultPolicyEngine(
-    private val skillRegistry: SkillRegistry,
+    private val skillRegistry: SkillRegistryPort,
 ) : PolicyPort {
     override fun review(actionSpec: ActionSpec): PolicyDecision {
         val registeredAction = skillRegistry.findAction(actionSpec.actionId)
@@ -88,3 +88,4 @@ private val urlRequiredActions = setOf(
     "open_web_url",
     "fetch_web_page_content",
 )
+

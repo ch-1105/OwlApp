@@ -6,7 +6,7 @@ import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
 import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.RiskLevel
-import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +56,7 @@ object BuildConfigCloudModelConfig {
 
 class HttpCloudModelAdapter(
     private val config: CloudModelConfig,
-    private val skillRegistry: SkillRegistry,
+    private val skillRegistry: SkillRegistryPort,
 ) : CloudModelAdapter {
     private val client = OkHttpClient.Builder()
         .connectTimeout(config.connectTimeoutSeconds, TimeUnit.SECONDS)
@@ -266,7 +266,7 @@ private fun CloudModelConfig.parseSuccessResponse(
     }
 }
 
-private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
+private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistryPort): String {
     val supportedActions = skillRegistry.allActions().joinToString("\n") { action ->
         val requiredParams = if (action.action.actionId in setOf("open_web_url", "fetch_web_page_content")) {
             "url"
@@ -496,14 +496,4 @@ private fun String.toModelApiStyle(): ModelApiStyle {
         else -> throw IllegalArgumentException("Unsupported model API style: $this")
     }
 }
-
-
-
-
-
-
-
-
-
-
 

@@ -5,6 +5,7 @@ import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.RiskLevel
 import com.phoneclaw.app.contracts.SkillActionManifest
 import com.phoneclaw.app.contracts.SkillManifest
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.web.containsWebFetchIntent
 import com.phoneclaw.app.web.extractFirstWebTarget
 
@@ -40,16 +41,9 @@ data class RegisteredSkillAction(
     }
 }
 
-interface SkillRegistry {
-    fun allSkills(): List<SkillManifest>
-    fun allActions(): List<RegisteredSkillAction>
-    fun findAction(actionId: String): RegisteredSkillAction?
-    fun matchUserMessage(userMessage: String): RegisteredSkillAction?
-}
-
 class StaticSkillRegistry(
     registeredActions: List<RegisteredSkillAction> = defaultRegisteredActions(),
-) : SkillRegistry {
+) : SkillRegistryPort {
     private val registeredActions = validateRegisteredActions(registeredActions)
     private val enabledRegisteredActions = registeredActions.filter { it.skill.enabled && it.action.enabled }
 

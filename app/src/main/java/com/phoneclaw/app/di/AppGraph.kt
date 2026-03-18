@@ -9,6 +9,7 @@ import com.phoneclaw.app.gateway.ports.AuditPort
 import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PolicyPort
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
@@ -20,7 +21,6 @@ import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.session.InMemorySessionStore
 import com.phoneclaw.app.skills.JsonSkillLoader
-import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.skills.StaticSkillRegistry
 import com.phoneclaw.app.telemetry.LogcatTelemetry
 import java.io.File
@@ -28,7 +28,7 @@ import java.io.File
 class AppGraph(
     appContext: Context,
 ) {
-    val skillRegistry: SkillRegistry = JsonSkillLoader
+    val skillRegistry: SkillRegistryPort = JsonSkillLoader
         .fromAssets(appContext.assets)
         .loadRegisteredActions()
         .takeIf { it.isNotEmpty() }
@@ -63,3 +63,4 @@ class AppGraph(
         auditPort = auditPort,
     )
 }
+

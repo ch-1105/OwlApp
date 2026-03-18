@@ -7,7 +7,7 @@ import com.phoneclaw.app.contracts.ExecutionRequest
 import com.phoneclaw.app.contracts.ExecutionResult
 import com.phoneclaw.app.contracts.VerificationResult
 import com.phoneclaw.app.gateway.ports.ExecutorPort
-import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.web.extractHtmlTitle
 import com.phoneclaw.app.web.extractReadableText
 import com.phoneclaw.app.web.normalizeWebUrl
@@ -18,7 +18,7 @@ import okhttp3.Request
 
 class IntentActionExecutor(
     private val appContext: Context,
-    private val skillRegistry: SkillRegistry,
+    private val skillRegistry: SkillRegistryPort,
 ) : ExecutorPort {
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
@@ -218,3 +218,4 @@ class IntentActionExecutor(
         )
     }
 }
+

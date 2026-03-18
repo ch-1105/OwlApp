@@ -8,7 +8,7 @@ import com.phoneclaw.app.contracts.PlanningTrace
 import com.phoneclaw.app.gateway.ports.PlannerOutcome
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PlannerResult
-import com.phoneclaw.app.skills.SkillRegistry
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.web.extractFirstWebTarget
 import com.phoneclaw.app.web.normalizeWebUrl
 import java.util.UUID
@@ -24,7 +24,7 @@ interface CloudModelAdapter {
 interface PlanningService : PlannerPort
 
 class StubCloudModelAdapter(
-    private val skillRegistry: SkillRegistry,
+    private val skillRegistry: SkillRegistryPort,
 ) : CloudModelAdapter {
     override suspend fun planAction(request: ModelRequest): ModelResponse {
         if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) {
@@ -210,3 +210,4 @@ class DefaultPlanningService(
         )
     }
 }
+

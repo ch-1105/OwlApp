@@ -51,10 +51,11 @@ class StaticSkillRegistry(
     registeredActions: List<RegisteredSkillAction> = defaultRegisteredActions(),
 ) : SkillRegistry {
     private val registeredActions = validateRegisteredActions(registeredActions)
+    private val enabledRegisteredActions = registeredActions.filter { it.skill.enabled && it.action.enabled }
 
-    override fun allSkills(): List<SkillManifest> = registeredActions.map { it.skill }.distinctBy { it.skillId }
+    override fun allSkills(): List<SkillManifest> = enabledRegisteredActions.map { it.skill }.distinctBy { it.skillId }
 
-    override fun allActions(): List<RegisteredSkillAction> = registeredActions
+    override fun allActions(): List<RegisteredSkillAction> = enabledRegisteredActions
 
     override fun findAction(actionId: String): RegisteredSkillAction? {
         return registeredActions.firstOrNull { it.action.actionId == actionId }
@@ -62,7 +63,7 @@ class StaticSkillRegistry(
 
     override fun matchUserMessage(userMessage: String): RegisteredSkillAction? {
         val normalized = userMessage.normalizeForMatch()
-        val bestTextMatch = registeredActions
+        val bestTextMatch = enabledRegisteredActions
             .map { action -> action to action.matchScore(normalized) }
             .filter { (_, score) -> score > 0 }
             .maxByOrNull { (_, score) -> score }
@@ -75,13 +76,17 @@ class StaticSkillRegistry(
         val webTarget = extractFirstWebTarget(userMessage)
         if (!webTarget.isNullOrBlank()) {
             return if (containsWebFetchIntent(userMessage)) {
-                findAction(ACTION_FETCH_WEB_PAGE_CONTENT)
+                findEnabledAction(ACTION_FETCH_WEB_PAGE_CONTENT)
             } else {
-                findAction(ACTION_OPEN_WEB_URL)
+                findEnabledAction(ACTION_OPEN_WEB_URL)
             }
         }
 
         return null
+    }
+
+    private fun findEnabledAction(actionId: String): RegisteredSkillAction? {
+        return enabledRegisteredActions.firstOrNull { it.action.actionId == actionId }
     }
 }
 
@@ -350,3 +355,4 @@ private fun String.normalizeForMatch(): String {
         .replace("_", "")
         .replace(" ", "")
 }
+

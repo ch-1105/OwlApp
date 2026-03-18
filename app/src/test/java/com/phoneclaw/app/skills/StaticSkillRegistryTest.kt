@@ -6,6 +6,7 @@ import com.phoneclaw.app.contracts.SkillActionManifest
 import com.phoneclaw.app.contracts.SkillManifest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -61,6 +62,22 @@ class StaticSkillRegistryTest {
     }
 
     @Test
+    fun excludesDisabledActionsFromDiscoveryButKeepsLookupForPolicy() {
+        val disabledAction = testRegisteredAction(
+            skillId = "test.disabled_skill",
+            actionId = "disabled_action",
+            skillEnabled = false,
+            actionEnabled = false,
+        )
+        val registry = StaticSkillRegistry(registeredActions = listOf(disabledAction))
+
+        assertTrue(registry.allSkills().isEmpty())
+        assertTrue(registry.allActions().isEmpty())
+        assertNull(registry.matchUserMessage("run test action"))
+        assertNotNull(registry.findAction("disabled_action"))
+    }
+
+    @Test
     fun rejectsUnsupportedSchemaVersion() {
         val error = runCatching {
             StaticSkillRegistry(
@@ -103,6 +120,8 @@ class StaticSkillRegistryTest {
         skillId: String,
         actionId: String,
         schemaVersion: String = CONTRACT_SCHEMA_VERSION,
+        skillEnabled: Boolean = true,
+        actionEnabled: Boolean = true,
     ): RegisteredSkillAction {
         val action = SkillActionManifest(
             actionId = actionId,
@@ -112,6 +131,7 @@ class StaticSkillRegistryTest {
             riskLevel = RiskLevel.SAFE,
             requiresConfirmation = false,
             expectedOutcome = "The test action finishes successfully",
+            enabled = actionEnabled,
             exampleUtterances = listOf("run test action"),
             matchKeywords = listOf("test"),
         )
@@ -125,7 +145,7 @@ class StaticSkillRegistryTest {
             platform = "android",
             appPackage = "com.example.test",
             defaultRiskLevel = RiskLevel.SAFE,
-            enabled = true,
+            enabled = skillEnabled,
             actions = listOf(action),
         )
 

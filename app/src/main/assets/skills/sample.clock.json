@@ -1,0 +1,42 @@
+{
+  "skill": {
+    "schema_version": "v1alpha1",
+    "skill_id": "sample.clock.single_app",
+    "skill_version": "0.1.0",
+    "skill_type": "single_app",
+    "display_name": "Clock Sample Skill",
+    "owner": "sample",
+    "platform": "android",
+    "app_package": "com.google.android.deskclock",
+    "default_risk_level": "safe",
+    "enabled": false,
+    "actions": [
+      {
+        "action_id": "open_clock_home",
+        "display_name": "Open Clock Home",
+        "description": "Open the clock app home screen",
+        "executor_type": "intent",
+        "risk_level": "safe",
+        "requires_confirmation": false,
+        "expected_outcome": "Clock home screen becomes foreground",
+        "enabled": false,
+        "example_utterances": [
+          "open the clock app",
+          "带我去时钟应用"
+        ],
+        "match_keywords": [
+          "clock app",
+          "clock",
+          "时钟应用",
+          "时钟"
+        ]
+      }
+    ]
+  },
+  "action_bindings": [
+    {
+      "action_id": "open_clock_home",
+      "intent_action": "android.intent.action.SHOW_ALARMS"
+    }
+  ]
+}

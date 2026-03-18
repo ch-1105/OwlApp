@@ -131,6 +131,7 @@ class JsonSkillLoaderTest {
                 "open_notification_settings",
                 "open_web_url",
                 "fetch_web_page_content",
+                "open_clock_home",
             ),
             actionIds,
         )

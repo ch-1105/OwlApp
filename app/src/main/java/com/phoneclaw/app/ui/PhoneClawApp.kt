@@ -18,7 +18,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -38,14 +37,6 @@ import com.phoneclaw.app.di.AppGraph
 fun PhoneClawApp(
     appGraph: AppGraph,
 ) {
-    val supportedActions = appGraph.skillRegistry.allActions()
-    val promptSuggestions = listOf(
-        "打开系统设置",
-        "打开 https://openai.com",
-        "读取 https://example.com 的网页内容",
-        "打开蓝牙设置",
-    )
-
     PhoneClawTheme {
         val viewModel: MainViewModel = viewModel(
             factory = MainViewModelFactory(appGraph.gateway),
@@ -71,19 +62,6 @@ fun PhoneClawApp(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    item {
-                        CapabilityCard(
-                            supportedActionIds = supportedActions.map { it.actionId },
-                        )
-                    }
-
-                    item {
-                        PromptSuggestionCard(
-                            suggestions = promptSuggestions,
-                            onSuggestionClick = viewModel::usePromptSuggestion,
-                        )
-                    }
-
                     items(
                         items = uiState.messages,
                         key = { message -> message.id },
@@ -110,54 +88,6 @@ fun PhoneClawApp(
                     onPromptChange = viewModel::onPromptChange,
                     onSubmit = viewModel::submit,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CapabilityCard(
-    supportedActionIds: List<String>,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "当前能力",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "现在已经支持低风险系统动作，以及简单浏览器能力：打开网页、抓取网页正文并直接回显给你。",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            supportedActionIds.forEach { actionId ->
-                Text("- $actionId")
-            }
-        }
-    }
-}
-
-@Composable
-private fun PromptSuggestionCard(
-    suggestions: List<String>,
-    onSuggestionClick: (String) -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "快速示例",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            suggestions.forEach { suggestion ->
-                OutlinedButton(
-                    onClick = { onSuggestionClick(suggestion) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(suggestion)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }

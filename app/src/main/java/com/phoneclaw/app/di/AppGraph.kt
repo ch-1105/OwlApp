@@ -6,6 +6,7 @@ import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
 import com.phoneclaw.app.gateway.ports.PlannerPort
+import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
 import com.phoneclaw.app.model.CloudModelAdapter
 import com.phoneclaw.app.model.DefaultPlanningService
@@ -14,6 +15,7 @@ import com.phoneclaw.app.model.HttpCloudModelAdapter
 import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.policy.PolicyEngine
+import com.phoneclaw.app.session.InMemorySessionStore
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.skills.StaticSkillRegistry
 
@@ -36,8 +38,13 @@ class AppGraph(
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
+    val sessionPort: SessionPort = InMemorySessionStore()
     val policyEngine: PolicyEngine = DefaultPolicyEngine(skillRegistry)
     val actionExecutor: ActionExecutor = IntentActionExecutor(appContext, skillRegistry)
-    val gateway: Gateway = DefaultGateway(plannerPort, policyEngine, actionExecutor)
+    val gateway: Gateway = DefaultGateway(
+        plannerPort = plannerPort,
+        policyEngine = policyEngine,
+        actionExecutor = actionExecutor,
+        sessionPort = sessionPort,
+    )
 }
-

@@ -9,10 +9,13 @@ enum class RiskLevel {
 enum class TaskState {
     RECEIVED,
     PLANNING,
+    AWAITING_CONFIRMATION,
+    APPROVED,
     REFUSED,
     EXECUTING,
     SUCCEEDED,
     FAILED,
+    CANCELLED,
 }
 
 data class SkillManifest(
@@ -139,3 +142,4 @@ data class TaskSnapshot(
     val executionResult: ExecutionResult? = null,
     val errorMessage: String? = null,
 )
+

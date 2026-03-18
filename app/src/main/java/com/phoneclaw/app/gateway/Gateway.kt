@@ -10,6 +10,7 @@ import com.phoneclaw.app.gateway.ports.AuditPort
 import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.gateway.ports.PlannerOutcome
 import com.phoneclaw.app.gateway.ports.PlannerPort
+import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.PolicyPort
 import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.gateway.ports.TaskEvent
@@ -28,6 +29,7 @@ class DefaultGateway(
     private val plannerPort: PlannerPort,
     private val policyPort: PolicyPort,
     private val executorPort: ExecutorPort,
+    private val summaryPort: SummaryPort,
     private val sessionPort: SessionPort,
     private val telemetryPort: TelemetryPort,
     private val auditPort: AuditPort,
@@ -276,7 +278,7 @@ class DefaultGateway(
             return result
         }
 
-        val summary = plannerPort.summarizeWebContent(taskId, userMessage, result.outputData)
+        val summary = summaryPort.summarize(taskId, userMessage, result.outputData)
             ?.trim()
             .orEmpty()
 

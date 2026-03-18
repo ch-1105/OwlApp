@@ -14,6 +14,7 @@ import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PlannerResult
 import com.phoneclaw.app.gateway.ports.PolicyDecision
 import com.phoneclaw.app.gateway.ports.PolicyPort
+import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.session.InMemorySessionStore
 import kotlinx.coroutines.runBlocking
@@ -30,6 +31,7 @@ class DefaultGatewayAuditTest {
             plannerPort = FakePlannerPort(),
             policyPort = FakePolicyPort(),
             executorPort = FakeExecutorPort(),
+            summaryPort = FakeSummaryPort(),
             sessionPort = sessionPort,
             telemetryPort = NoOpTelemetryPort(),
             auditPort = auditPort,
@@ -76,12 +78,6 @@ class DefaultGatewayAuditTest {
                 ),
             )
         }
-
-        override suspend fun summarizeWebContent(
-            taskId: String,
-            userMessage: String,
-            webContent: Map<String, String>,
-        ): String? = null
     }
 
     private class FakePolicyPort : PolicyPort {
@@ -107,6 +103,10 @@ class DefaultGatewayAuditTest {
                 ),
             )
         }
+    }
+
+    private class FakeSummaryPort : SummaryPort {
+        override suspend fun summarize(taskId: String, userMessage: String, content: Map<String, String>): String? = null
     }
 
     private class NoOpTelemetryPort : TelemetryPort {

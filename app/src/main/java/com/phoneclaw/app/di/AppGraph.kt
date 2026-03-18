@@ -7,14 +7,17 @@ import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
 import com.phoneclaw.app.gateway.ports.AuditPort
 import com.phoneclaw.app.gateway.ports.ExecutorPort
+import com.phoneclaw.app.gateway.ports.ModelPort
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PolicyPort
 import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SessionPort
+import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
-import com.phoneclaw.app.model.CloudModelAdapter
+import com.phoneclaw.app.model.DefaultModelService
 import com.phoneclaw.app.model.DefaultPlanningService
+import com.phoneclaw.app.model.DefaultSummaryService
 import com.phoneclaw.app.model.FallbackCloudModelAdapter
 import com.phoneclaw.app.model.HttpCloudModelAdapter
 import com.phoneclaw.app.model.StubCloudModelAdapter
@@ -38,14 +41,20 @@ class AppGraph(
     private val cloudConfig = BuildConfigCloudModelConfig.fromBuildConfig()
     private val remoteModelAdapter = HttpCloudModelAdapter(cloudConfig, skillRegistry)
     private val stubModelAdapter = StubCloudModelAdapter(skillRegistry)
-
-    val cloudModelAdapter: CloudModelAdapter = FallbackCloudModelAdapter(
+    private val fallbackModelAdapter = FallbackCloudModelAdapter(
         remoteAdapter = remoteModelAdapter,
         fallbackAdapter = stubModelAdapter,
         useRemote = cloudConfig.remoteEnabled,
     )
+
+    val modelPort: ModelPort = DefaultModelService(fallbackModelAdapter)
     val plannerPort: PlannerPort = DefaultPlanningService(
-        cloudModelAdapter = cloudModelAdapter,
+        modelPort = modelPort,
+        allowCloud = cloudConfig.remoteEnabled,
+        preferredProvider = cloudConfig.provider,
+    )
+    val summaryPort: SummaryPort = DefaultSummaryService(
+        modelPort = modelPort,
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
@@ -58,9 +67,9 @@ class AppGraph(
         plannerPort = plannerPort,
         policyPort = policyPort,
         executorPort = executorPort,
+        summaryPort = summaryPort,
         sessionPort = sessionPort,
         telemetryPort = telemetryPort,
         auditPort = auditPort,
     )
 }
-

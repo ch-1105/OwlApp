@@ -2,15 +2,16 @@ package com.phoneclaw.app.model
 
 import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
+import com.phoneclaw.app.gateway.ports.ModelPort
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class DefaultPlanningServiceSummarizeTest {
+class DefaultSummaryServiceTest {
     @Test
-    fun summarizeWebContent_returnsModelOutput() = runBlocking {
-        val adapter = RecordingAdapter(
+    fun summarize_returnsModelOutput() = runBlocking {
+        val modelPort = RecordingModelPort(
             response = ModelResponse(
                 requestId = "m-1",
                 provider = "stub",
@@ -18,16 +19,16 @@ class DefaultPlanningServiceSummarizeTest {
                 outputText = "这是总结",
             ),
         )
-        val service = DefaultPlanningService(
-            cloudModelAdapter = adapter,
+        val service = DefaultSummaryService(
+            modelPort = modelPort,
             allowCloud = true,
             preferredProvider = "stub",
         )
 
-        val summary = service.summarizeWebContent(
+        val summary = service.summarize(
             taskId = "task-1",
             userMessage = "这篇网页说了什么",
-            webContent = mapOf(
+            content = mapOf(
                 "page_url" to "https://example.com",
                 "page_title" to "Example",
                 "page_content" to "This page describes a sample product and its release date.",
@@ -35,12 +36,12 @@ class DefaultPlanningServiceSummarizeTest {
         )
 
         assertEquals("这是总结", summary)
-        assertEquals("summarize_web_content", adapter.lastRequest?.taskType)
+        assertEquals("summarize_web_content", modelPort.lastRequest?.taskType)
     }
 
     @Test
-    fun summarizeWebContent_returnsNullWhenPageContentMissing() = runBlocking {
-        val adapter = RecordingAdapter(
+    fun summarize_returnsNullWhenPageContentMissing() = runBlocking {
+        val modelPort = RecordingModelPort(
             response = ModelResponse(
                 requestId = "m-2",
                 provider = "stub",
@@ -48,28 +49,28 @@ class DefaultPlanningServiceSummarizeTest {
                 outputText = "unused",
             ),
         )
-        val service = DefaultPlanningService(
-            cloudModelAdapter = adapter,
+        val service = DefaultSummaryService(
+            modelPort = modelPort,
             allowCloud = true,
             preferredProvider = "stub",
         )
 
-        val summary = service.summarizeWebContent(
+        val summary = service.summarize(
             taskId = "task-2",
             userMessage = "总结",
-            webContent = emptyMap(),
+            content = emptyMap(),
         )
 
         assertNull(summary)
-        assertNull(adapter.lastRequest)
+        assertNull(modelPort.lastRequest)
     }
 
-    private class RecordingAdapter(
+    private class RecordingModelPort(
         private val response: ModelResponse,
-    ) : CloudModelAdapter {
+    ) : ModelPort {
         var lastRequest: ModelRequest? = null
 
-        override suspend fun planAction(request: ModelRequest): ModelResponse {
+        override suspend fun infer(request: ModelRequest): ModelResponse {
             lastRequest = request
             return response.copy(requestId = request.requestId)
         }

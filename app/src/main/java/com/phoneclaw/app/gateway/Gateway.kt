@@ -4,8 +4,8 @@ import com.phoneclaw.app.contracts.ExecutionRequest
 import com.phoneclaw.app.contracts.TaskSnapshot
 import com.phoneclaw.app.contracts.TaskState
 import com.phoneclaw.app.executor.ActionExecutor
-import com.phoneclaw.app.model.PlanningOutcome
-import com.phoneclaw.app.model.PlanningService
+import com.phoneclaw.app.gateway.ports.PlannerOutcome
+import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.policy.PolicyEngine
 import java.util.UUID
 
@@ -14,16 +14,16 @@ interface Gateway {
 }
 
 class DefaultGateway(
-    private val planningService: PlanningService,
+    private val plannerPort: PlannerPort,
     private val policyEngine: PolicyEngine,
     private val actionExecutor: ActionExecutor,
 ) : Gateway {
     override suspend fun submitUserMessage(userMessage: String): TaskSnapshot {
         val taskId = UUID.randomUUID().toString()
-        val planning = planningService.planAction(taskId, userMessage)
+        val planning = plannerPort.planAction(taskId, userMessage)
 
         return when (val outcome = planning.outcome) {
-            is PlanningOutcome.PlannedAction -> {
+            is PlannerOutcome.PlannedAction -> {
                 val decision = policyEngine.review(outcome.actionSpec)
                 if (!decision.allowed) {
                     TaskSnapshot(
@@ -53,7 +53,7 @@ class DefaultGateway(
                 }
             }
 
-            is PlanningOutcome.ClarificationNeeded -> {
+            is PlannerOutcome.ClarificationNeeded -> {
                 TaskSnapshot(
                     taskId = taskId,
                     state = TaskState.FAILED,
@@ -63,7 +63,7 @@ class DefaultGateway(
                 )
             }
 
-            is PlanningOutcome.Refused -> {
+            is PlannerOutcome.Refused -> {
                 TaskSnapshot(
                     taskId = taskId,
                     state = TaskState.REFUSED,
@@ -75,3 +75,4 @@ class DefaultGateway(
         }
     }
 }
+

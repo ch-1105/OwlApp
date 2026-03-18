@@ -5,6 +5,9 @@ import com.phoneclaw.app.contracts.ModelRequest
 import com.phoneclaw.app.contracts.ModelResponse
 import com.phoneclaw.app.contracts.PlannedActionPayload
 import com.phoneclaw.app.contracts.PlanningTrace
+import com.phoneclaw.app.gateway.ports.PlannerOutcome
+import com.phoneclaw.app.gateway.ports.PlannerPort
+import com.phoneclaw.app.gateway.ports.PlannerResult
 import com.phoneclaw.app.skills.SkillRegistry
 import com.phoneclaw.app.web.extractFirstWebTarget
 import com.phoneclaw.app.web.normalizeWebUrl
@@ -12,24 +15,11 @@ import java.util.UUID
 
 private val browserActionIds = setOf("open_web_url", "fetch_web_page_content")
 
-sealed interface PlanningOutcome {
-    data class PlannedAction(val actionSpec: ActionSpec) : PlanningOutcome
-    data class ClarificationNeeded(val question: String) : PlanningOutcome
-    data class Refused(val reason: String) : PlanningOutcome
-}
-
-data class PlanningResult(
-    val outcome: PlanningOutcome,
-    val trace: PlanningTrace,
-)
-
 interface CloudModelAdapter {
     suspend fun planAction(request: ModelRequest): ModelResponse
 }
 
-interface PlanningService {
-    suspend fun planAction(taskId: String, userMessage: String): PlanningResult
-}
+interface PlanningService : PlannerPort
 
 class StubCloudModelAdapter(
     private val skillRegistry: SkillRegistry,
@@ -67,7 +57,7 @@ class DefaultPlanningService(
     private val allowCloud: Boolean,
     private val preferredProvider: String,
 ) : PlanningService {
-    override suspend fun planAction(taskId: String, userMessage: String): PlanningResult {
+    override suspend fun planAction(taskId: String, userMessage: String): PlannerResult {
         val request = ModelRequest(
             requestId = UUID.randomUUID().toString(),
             taskId = taskId,
@@ -83,29 +73,29 @@ class DefaultPlanningService(
         response.plannedAction?.let { payload ->
             val normalizedPayload = payload.normalizeForUserMessage(userMessage)
             if (normalizedPayload.requiresUrlParam() && normalizedPayload.params["url"].isNullOrBlank()) {
-                return PlanningResult(
-                    outcome = PlanningOutcome.ClarificationNeeded(
+                return PlannerResult(
+                    outcome = PlannerOutcome.ClarificationNeeded(
                         "请提供完整网页地址，例如 https://example.com 。",
                     ),
                     trace = trace,
                 )
             }
 
-            return PlanningResult(
-                outcome = PlanningOutcome.PlannedAction(normalizedPayload.toActionSpec(taskId)),
+            return PlannerResult(
+                outcome = PlannerOutcome.PlannedAction(normalizedPayload.toActionSpec(taskId)),
                 trace = trace,
             )
         }
 
         if (response.error != null) {
-            return PlanningResult(
-                outcome = PlanningOutcome.Refused(response.error),
+            return PlannerResult(
+                outcome = PlannerOutcome.Refused(response.error),
                 trace = trace,
             )
         }
 
-        return PlanningResult(
-            outcome = PlanningOutcome.ClarificationNeeded(
+        return PlannerResult(
+            outcome = PlannerOutcome.ClarificationNeeded(
                 response.outputText.ifBlank {
                     "Please clarify which supported action you want to run."
                 },
@@ -160,3 +150,4 @@ class DefaultPlanningService(
         )
     }
 }
+

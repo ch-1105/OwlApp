@@ -5,12 +5,12 @@ import com.phoneclaw.app.executor.ActionExecutor
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
+import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
 import com.phoneclaw.app.model.CloudModelAdapter
 import com.phoneclaw.app.model.DefaultPlanningService
 import com.phoneclaw.app.model.FallbackCloudModelAdapter
 import com.phoneclaw.app.model.HttpCloudModelAdapter
-import com.phoneclaw.app.model.PlanningService
 import com.phoneclaw.app.model.StubCloudModelAdapter
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.policy.PolicyEngine
@@ -31,12 +31,13 @@ class AppGraph(
         fallbackAdapter = stubModelAdapter,
         useRemote = cloudConfig.remoteEnabled,
     )
-    val planningService: PlanningService = DefaultPlanningService(
+    val plannerPort: PlannerPort = DefaultPlanningService(
         cloudModelAdapter = cloudModelAdapter,
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
     val policyEngine: PolicyEngine = DefaultPolicyEngine(skillRegistry)
     val actionExecutor: ActionExecutor = IntentActionExecutor(appContext, skillRegistry)
-    val gateway: Gateway = DefaultGateway(planningService, policyEngine, actionExecutor)
+    val gateway: Gateway = DefaultGateway(plannerPort, policyEngine, actionExecutor)
 }
+

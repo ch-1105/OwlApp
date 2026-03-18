@@ -1,5 +1,7 @@
 package com.phoneclaw.app.contracts
 
+private const val CONTRACT_SCHEMA_VERSION = "v1alpha1"
+
 enum class RiskLevel {
     SAFE,
     GUARDED,
@@ -46,6 +48,7 @@ data class SkillActionManifest(
 )
 
 data class ActionSpec(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
     val actionId: String,
     val skillId: String,
     val taskId: String,
@@ -68,6 +71,7 @@ data class VerificationResult(
 )
 
 data class ExecutionRequest(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
     val requestId: String,
     val taskId: String,
     val actionSpec: ActionSpec,
@@ -75,6 +79,7 @@ data class ExecutionRequest(
 )
 
 data class ExecutionResult(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
     val requestId: String,
     val taskId: String,
     val actionId: String,
@@ -86,6 +91,7 @@ data class ExecutionResult(
 )
 
 data class ModelRequest(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
     val requestId: String,
     val taskId: String,
     val taskType: String,
@@ -115,6 +121,7 @@ enum class ModelErrorKind {
 }
 
 data class ModelResponse(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
     val requestId: String,
     val provider: String,
     val modelId: String,
@@ -142,4 +149,3 @@ data class TaskSnapshot(
     val executionResult: ExecutionResult? = null,
     val errorMessage: String? = null,
 )
-

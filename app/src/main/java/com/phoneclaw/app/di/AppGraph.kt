@@ -1,7 +1,9 @@
 package com.phoneclaw.app.di
 
 import android.content.Context
+import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
+import com.phoneclaw.app.data.db.PhoneClawDatabase
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
@@ -10,8 +12,8 @@ import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.gateway.ports.ModelPort
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PolicyPort
-import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SessionPort
+import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
@@ -31,6 +33,12 @@ import java.io.File
 class AppGraph(
     appContext: Context,
 ) {
+    val database: PhoneClawDatabase = Room.databaseBuilder(
+        appContext,
+        PhoneClawDatabase::class.java,
+        "phoneclaw.db",
+    ).build()
+
     private val bundledRegisteredActions = JsonSkillLoader
         .fromAssets(appContext.assets)
         .loadRegisteredActions()

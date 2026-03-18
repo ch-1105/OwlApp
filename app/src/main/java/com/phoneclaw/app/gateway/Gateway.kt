@@ -17,6 +17,7 @@ import com.phoneclaw.app.policy.PolicyEngine
 import java.util.UUID
 
 private const val DEFAULT_SESSION_ID = "default"
+private const val ACTION_FETCH_WEB_PAGE_CONTENT = "fetch_web_page_content"
 
 interface Gateway {
     suspend fun submitUserMessage(userMessage: String): TaskSnapshot
@@ -115,7 +116,9 @@ class DefaultGateway(
                         taskId = taskId,
                         actionSpec = outcome.actionSpec,
                     )
-                    val result = actionExecutor.execute(executionRequest)
+                    val rawResult = actionExecutor.execute(executionRequest)
+                    val result = maybeSummarizeWebContent(taskId, userMessage, rawResult)
+
                     sessionPort.storeExecutionResult(taskId, result)
                     sessionPort.appendTaskEvent(
                         taskId = taskId,
@@ -195,6 +198,36 @@ class DefaultGateway(
                 )
             }
         }
+    }
+
+    private suspend fun maybeSummarizeWebContent(
+        taskId: String,
+        userMessage: String,
+        result: ExecutionResult,
+    ): ExecutionResult {
+        if (result.status != "success" || result.actionId != ACTION_FETCH_WEB_PAGE_CONTENT) {
+            return result
+        }
+
+        val summary = plannerPort.summarizeWebContent(taskId, userMessage, result.outputData)
+            ?.trim()
+            .orEmpty()
+
+        if (summary.isBlank()) {
+            return result
+        }
+
+        telemetryPort.recordTaskEvent(
+            taskId = taskId,
+            eventType = "web_content_summarized",
+            payload = mapOf(
+                "summary_length" to summary.length.toString(),
+            ),
+        )
+
+        return result.copy(
+            outputData = result.outputData + ("ai_summary" to summary),
+        )
     }
 
     private fun transitionTask(taskId: String, state: TaskState) {

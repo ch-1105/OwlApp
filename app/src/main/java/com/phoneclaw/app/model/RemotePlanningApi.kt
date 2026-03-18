@@ -24,6 +24,9 @@ enum class ModelApiStyle {
     OPENAI_CHAT_COMPLETIONS,
 }
 
+
+private const val TASK_TYPE_SUMMARIZE_WEB_CONTENT = "summarize_web_content"
+
 data class CloudModelConfig(
     val provider: String,
     val baseUrl: String,
@@ -61,6 +64,7 @@ class HttpCloudModelAdapter(
         .build()
 
     private val planningSystemPrompt: String = buildPlanningSystemPrompt(skillRegistry)
+    private val summarySystemPrompt: String = buildSummarySystemPrompt()
 
     override suspend fun planAction(request: ModelRequest): ModelResponse {
         if (!config.remoteEnabled || !request.allowCloud) {
@@ -76,7 +80,7 @@ class HttpCloudModelAdapter(
 
         return withContext(Dispatchers.IO) {
             val endpoint = config.endpointPath()
-            val requestBody = config.buildRequestBody(request, planningSystemPrompt).toString()
+            val requestBody = config.buildRequestBody(request, planningSystemPrompt, summarySystemPrompt).toString()
 
             val requestBuilder = Request.Builder()
                 .url(endpoint)
@@ -94,7 +98,7 @@ class HttpCloudModelAdapter(
             try {
                 client.newCall(httpRequest).execute().use { response ->
                     val responseBody = response.body?.string().orEmpty()
-                    val parsed = config.parseSuccessResponse(responseBody, request.requestId)
+                    val parsed = config.parseSuccessResponse(responseBody, request)
 
                     if (!response.isSuccessful) {
                         return@withContext ModelResponse(
@@ -184,7 +188,9 @@ class FallbackCloudModelAdapter(
         }
 
         val fallbackResponse = fallbackAdapter.planAction(request)
-        return if (fallbackResponse.plannedAction != null) {
+        return if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT && fallbackResponse.error == null) {
+            fallbackResponse
+        } else if (fallbackResponse.plannedAction != null) {
             fallbackResponse
         } else {
             remoteResponse
@@ -213,6 +219,7 @@ private fun CloudModelConfig.endpointPath(): String {
 private fun CloudModelConfig.buildRequestBody(
     request: ModelRequest,
     planningSystemPrompt: String,
+    summarySystemPrompt: String,
 ): JSONObject {
     return when (apiStyle) {
         ModelApiStyle.PHONECLAW_GATEWAY -> JSONObject()
@@ -230,7 +237,7 @@ private fun CloudModelConfig.buildRequestBody(
                 put(
                     JSONObject()
                         .put("role", "system")
-                        .put("content", planningSystemPrompt),
+                        .put("content", if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) summarySystemPrompt else planningSystemPrompt),
                 )
                 put(
                     JSONObject()
@@ -240,20 +247,21 @@ private fun CloudModelConfig.buildRequestBody(
             })
             .put("temperature", 0)
             .put("stream", false)
-            .put("max_tokens", 512)
+            .put("max_tokens", if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) 768 else 512)
     }
 }
 
 private fun CloudModelConfig.parseSuccessResponse(
     responseBody: String,
-    fallbackRequestId: String,
+    request: ModelRequest,
 ): ParsedRemoteResponse? {
     return when (apiStyle) {
         ModelApiStyle.PHONECLAW_GATEWAY -> responseBody.parseGatewayResponseOrNull()
         ModelApiStyle.OPENAI_CHAT_COMPLETIONS -> responseBody.parseOpenAiChatResponseOrNull(
             provider = provider,
             fallbackModelId = modelId,
-            fallbackRequestId = fallbackRequestId,
+            fallbackRequestId = request.requestId,
+            taskType = request.taskType,
         )
     }
 }
@@ -324,6 +332,17 @@ private fun buildPlanningSystemPrompt(skillRegistry: SkillRegistry): String {
     """.trimIndent()
 }
 
+private fun buildSummarySystemPrompt(): String {
+    return """
+        You are the summarization model for PhoneClaw.
+        Read the provided page content and answer the user request directly.
+        Rules:
+        - Reply in concise Chinese.
+        - Focus on the user question first, then list key points from the page.
+        - If page content is insufficient, say what is missing.
+        - Return plain text only.
+    """.trimIndent()
+}
 private fun String.parseGatewayResponseOrNull(): ParsedRemoteResponse? {
     if (isBlank()) return null
     return runCatching {
@@ -344,14 +363,27 @@ private fun String.parseOpenAiChatResponseOrNull(
     provider: String,
     fallbackModelId: String,
     fallbackRequestId: String,
+    taskType: String,
 ): ParsedRemoteResponse? {
     if (isBlank()) return null
 
     return runCatching {
         val root = JSONObject(this)
         val content = root.extractAssistantContent()
-        val contentJson = content.extractJsonObjectOrNull()?.let(::JSONObject)
 
+        if (taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) {
+            return@runCatching ParsedRemoteResponse(
+                requestId = fallbackRequestId,
+                provider = provider,
+                modelId = root.optString("model").ifBlank { fallbackModelId },
+                outputText = content,
+                action = null,
+                error = null,
+                errorKind = null,
+            )
+        }
+
+        val contentJson = content.extractJsonObjectOrNull()?.let(::JSONObject)
         ParsedRemoteResponse(
             requestId = fallbackRequestId,
             provider = provider,
@@ -464,5 +496,14 @@ private fun String.toModelApiStyle(): ModelApiStyle {
         else -> throw IllegalArgumentException("Unsupported model API style: $this")
     }
 }
+
+
+
+
+
+
+
+
+
 
 

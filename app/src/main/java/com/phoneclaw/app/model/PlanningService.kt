@@ -13,6 +13,8 @@ import com.phoneclaw.app.web.extractFirstWebTarget
 import com.phoneclaw.app.web.normalizeWebUrl
 import java.util.UUID
 
+private const val TASK_TYPE_PLAN_ACTION = "plan_action"
+private const val TASK_TYPE_SUMMARIZE_WEB_CONTENT = "summarize_web_content"
 private val browserActionIds = setOf("open_web_url", "fetch_web_page_content")
 
 interface CloudModelAdapter {
@@ -25,6 +27,10 @@ class StubCloudModelAdapter(
     private val skillRegistry: SkillRegistry,
 ) : CloudModelAdapter {
     override suspend fun planAction(request: ModelRequest): ModelResponse {
+        if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) {
+            return summarizeWebContent(request)
+        }
+
         val userMessage = request.inputMessages.joinToString(" ")
         val matchedAction = skillRegistry.matchUserMessage(userMessage)
 
@@ -50,6 +56,26 @@ class StubCloudModelAdapter(
             )
         }
     }
+
+    private fun summarizeWebContent(request: ModelRequest): ModelResponse {
+        val flattened = request.inputMessages.joinToString("\n")
+        val pageContent = flattened.substringAfter("Page content:", "").trim()
+        val summary = if (pageContent.isBlank()) {
+            "我没有拿到可读网页正文，请提供一个可访问的网页地址后再试一次。"
+        } else {
+            """
+            网页内容总结（stub）：
+            ${pageContent.take(320)}
+            """.trimIndent()
+        }
+
+        return ModelResponse(
+            requestId = request.requestId,
+            provider = "stub-cloud",
+            modelId = "stub-skill-router",
+            outputText = summary,
+        )
+    }
 }
 
 class DefaultPlanningService(
@@ -61,7 +87,7 @@ class DefaultPlanningService(
         val request = ModelRequest(
             requestId = UUID.randomUUID().toString(),
             taskId = taskId,
-            taskType = "plan_action",
+            taskType = TASK_TYPE_PLAN_ACTION,
             inputMessages = listOf(userMessage),
             allowCloud = allowCloud,
             preferredProvider = preferredProvider,
@@ -102,6 +128,40 @@ class DefaultPlanningService(
             ),
             trace = trace,
         )
+    }
+
+    override suspend fun summarizeWebContent(
+        taskId: String,
+        userMessage: String,
+        webContent: Map<String, String>,
+    ): String? {
+        val pageContent = webContent["page_content"]?.trim().orEmpty()
+        if (pageContent.isBlank()) {
+            return null
+        }
+
+        val request = ModelRequest(
+            requestId = UUID.randomUUID().toString(),
+            taskId = taskId,
+            taskType = TASK_TYPE_SUMMARIZE_WEB_CONTENT,
+            inputMessages = buildList {
+                add("User question: $userMessage")
+                webContent["page_url"]?.takeIf { it.isNotBlank() }?.let { add("Page url: $it") }
+                webContent["page_title"]?.takeIf { it.isNotBlank() }?.let { add("Page title: $it") }
+                add("Page content:\n$pageContent")
+                add("Please provide a concise Chinese summary that answers the user question.")
+            },
+            allowCloud = allowCloud,
+            preferredProvider = preferredProvider,
+        )
+
+        val response = cloudModelAdapter.planAction(request)
+        if (response.error != null) {
+            return null
+        }
+
+        return response.outputText.trim().takeIf { it.isNotBlank() }
+            ?: pageContent.take(320)
     }
 
     private fun PlannedActionPayload.normalizeForUserMessage(userMessage: String): PlannedActionPayload {
@@ -150,4 +210,3 @@ class DefaultPlanningService(
         )
     }
 }
-

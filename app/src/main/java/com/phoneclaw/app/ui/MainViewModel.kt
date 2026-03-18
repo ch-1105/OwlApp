@@ -108,9 +108,14 @@ class MainViewModel(
                             append("\n页面标题：$pageTitle")
                         }
 
-                        val pageContent = result.outputData["page_content"]
-                        if (!pageContent.isNullOrBlank()) {
-                            append("\n网页内容摘要：\n$pageContent")
+                        val aiSummary = result.outputData["ai_summary"]
+                        if (!aiSummary.isNullOrBlank()) {
+                            append("\n网页总结：\n$aiSummary")
+                        } else {
+                            val pageContent = result.outputData["page_content"]
+                            if (!pageContent.isNullOrBlank()) {
+                                append("\n网页内容摘要：\n$pageContent")
+                            }
                         }
                     }
                 }
@@ -166,3 +171,4 @@ class MainViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
+

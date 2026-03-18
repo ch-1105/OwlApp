@@ -16,4 +16,5 @@ data class PlannerResult(
 
 interface PlannerPort {
     suspend fun planAction(taskId: String, userMessage: String): PlannerResult
+    suspend fun summarizeWebContent(taskId: String, userMessage: String, webContent: Map<String, String>): String?
 }

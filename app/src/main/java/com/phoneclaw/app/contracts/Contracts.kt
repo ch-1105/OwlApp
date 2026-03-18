@@ -1,6 +1,6 @@
 package com.phoneclaw.app.contracts
 
-private const val CONTRACT_SCHEMA_VERSION = "v1alpha1"
+const val CONTRACT_SCHEMA_VERSION = "v1alpha1"
 
 enum class RiskLevel {
     SAFE,
@@ -149,3 +149,4 @@ data class TaskSnapshot(
     val executionResult: ExecutionResult? = null,
     val errorMessage: String? = null,
 )
+

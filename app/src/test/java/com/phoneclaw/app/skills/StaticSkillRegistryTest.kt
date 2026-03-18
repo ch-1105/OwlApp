@@ -1,7 +1,12 @@
 package com.phoneclaw.app.skills
 
+import com.phoneclaw.app.contracts.CONTRACT_SCHEMA_VERSION
+import com.phoneclaw.app.contracts.RiskLevel
+import com.phoneclaw.app.contracts.SkillActionManifest
+import com.phoneclaw.app.contracts.SkillManifest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StaticSkillRegistryTest {
@@ -54,5 +59,80 @@ class StaticSkillRegistryTest {
         assertNotNull(action)
         assertEquals("fetch_web_page_content", action?.actionId)
     }
-}
 
+    @Test
+    fun rejectsUnsupportedSchemaVersion() {
+        val error = runCatching {
+            StaticSkillRegistry(
+                registeredActions = listOf(
+                    testRegisteredAction(
+                        skillId = "test.unsupported_schema",
+                        actionId = "test_action",
+                        schemaVersion = "v2",
+                    ),
+                ),
+            )
+        }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error?.message?.contains("unsupported schema version") == true)
+    }
+
+    @Test
+    fun rejectsDuplicateActionIds() {
+        val error = runCatching {
+            StaticSkillRegistry(
+                registeredActions = listOf(
+                    testRegisteredAction(
+                        skillId = "test.duplicate_one",
+                        actionId = "duplicate_action",
+                    ),
+                    testRegisteredAction(
+                        skillId = "test.duplicate_two",
+                        actionId = "duplicate_action",
+                    ),
+                ),
+            )
+        }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error?.message?.contains("Duplicate action ids") == true)
+    }
+
+    private fun testRegisteredAction(
+        skillId: String,
+        actionId: String,
+        schemaVersion: String = CONTRACT_SCHEMA_VERSION,
+    ): RegisteredSkillAction {
+        val action = SkillActionManifest(
+            actionId = actionId,
+            displayName = "Test Action",
+            description = "Run a test action",
+            executorType = "intent",
+            riskLevel = RiskLevel.SAFE,
+            requiresConfirmation = false,
+            expectedOutcome = "The test action finishes successfully",
+            exampleUtterances = listOf("run test action"),
+            matchKeywords = listOf("test"),
+        )
+        val skill = SkillManifest(
+            schemaVersion = schemaVersion,
+            skillId = skillId,
+            skillVersion = "0.1.0",
+            skillType = "system",
+            displayName = "Test Skill",
+            owner = "test",
+            platform = "android",
+            appPackage = "com.example.test",
+            defaultRiskLevel = RiskLevel.SAFE,
+            enabled = true,
+            actions = listOf(action),
+        )
+
+        return RegisteredSkillAction(
+            skill = skill,
+            action = action,
+            intentAction = "android.settings.SETTINGS",
+        )
+    }
+}

@@ -55,6 +55,7 @@ class AccessibilityCaptureBridgeTest {
                 timestamp = 123L,
                 nodes = listOf(
                     NodeSnapshotInput(
+                        nodeId = "0",
                         className = "android.view.View",
                         text = "root",
                         contentDescription = null,

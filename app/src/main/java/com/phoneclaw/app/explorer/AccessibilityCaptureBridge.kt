@@ -5,14 +5,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.lang.ref.WeakReference
 
-object AccessibilityCaptureBridge {
+interface AccessibilityExplorerBridge {
+    val latestSnapshot: StateFlow<PageTreeSnapshot?>
+
+    fun captureCurrentPageTree(): PageTreeSnapshot?
+
+    fun performClick(nodeId: String): Boolean
+
+    fun performBack(): Boolean
+}
+
+object AccessibilityCaptureBridge : AccessibilityExplorerBridge {
     private var serviceRef: WeakReference<PhoneClawAccessibilityService>? = null
 
     private val _serviceConnected = MutableStateFlow(false)
     val serviceConnected: StateFlow<Boolean> = _serviceConnected.asStateFlow()
 
     private val _latestSnapshot = MutableStateFlow<PageTreeSnapshot?>(null)
-    val latestSnapshot: StateFlow<PageTreeSnapshot?> = _latestSnapshot.asStateFlow()
+    override val latestSnapshot: StateFlow<PageTreeSnapshot?> = _latestSnapshot.asStateFlow()
 
     internal fun attach(service: PhoneClawAccessibilityService) {
         serviceRef = WeakReference(service)
@@ -39,9 +49,25 @@ object AccessibilityCaptureBridge {
         _latestSnapshot.value = null
     }
 
-    fun captureCurrentPageTree(): PageTreeSnapshot? {
+    override fun captureCurrentPageTree(): PageTreeSnapshot? {
         val snapshot = serviceRef?.get()?.captureCurrentPageTree()
         publishSnapshot(snapshot)
         return snapshot
+    }
+
+    override fun performClick(nodeId: String): Boolean {
+        val performed = serviceRef?.get()?.performClick(nodeId) == true
+        if (performed) {
+            publishSnapshot(serviceRef?.get()?.captureCurrentPageTree())
+        }
+        return performed
+    }
+
+    override fun performBack(): Boolean {
+        val performed = serviceRef?.get()?.performBack() == true
+        if (performed) {
+            publishSnapshot(serviceRef?.get()?.captureCurrentPageTree())
+        }
+        return performed
     }
 }

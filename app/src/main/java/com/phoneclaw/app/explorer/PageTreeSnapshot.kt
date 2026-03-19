@@ -8,6 +8,7 @@ data class PageTreeSnapshot(
 )
 
 data class AccessibilityNodeSnapshot(
+    val nodeId: String,
     val className: String?,
     val text: String?,
     val contentDescription: String?,
@@ -20,6 +21,7 @@ data class AccessibilityNodeSnapshot(
 )
 
 internal data class NodeSnapshotInput(
+    val nodeId: String,
     val className: String?,
     val text: String?,
     val contentDescription: String?,
@@ -33,6 +35,7 @@ internal data class NodeSnapshotInput(
 
 internal fun NodeSnapshotInput.toSnapshot(): AccessibilityNodeSnapshot {
     return AccessibilityNodeSnapshot(
+        nodeId = nodeId,
         className = className,
         text = text,
         contentDescription = contentDescription,
@@ -49,6 +52,17 @@ fun PageTreeSnapshot.totalNodeCount(): Int {
     return nodes.sumOf { it.totalNodeCount() }
 }
 
+fun PageTreeSnapshot.findNode(nodeId: String): AccessibilityNodeSnapshot? {
+    return nodes.firstNotNullOfOrNull { node -> node.findDescendant(nodeId) }
+}
+
 private fun AccessibilityNodeSnapshot.totalNodeCount(): Int {
     return 1 + children.sumOf { it.totalNodeCount() }
+}
+
+private fun AccessibilityNodeSnapshot.findDescendant(nodeId: String): AccessibilityNodeSnapshot? {
+    if (this.nodeId == nodeId) {
+        return this
+    }
+    return children.firstNotNullOfOrNull { child -> child.findDescendant(nodeId) }
 }

@@ -3,6 +3,8 @@ package com.phoneclaw.app.di
 import android.content.Context
 import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
+import com.phoneclaw.app.explorer.AccessibilityAppExplorer
+import com.phoneclaw.app.explorer.AppExplorer
 import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
 import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_1_2
 import com.phoneclaw.app.data.db.PhoneClawDatabase
@@ -86,6 +88,7 @@ class AppGraph(
     val sessionPort: SessionPort = RoomSessionStore(database.taskDao())
     val appScanner: AppScanner = PackageManagerAppScanner(appContext)
     val authorizationManager: AuthorizationManager = RoomAuthorizationManager(database.authorizedAppDao())
+    val appExplorer: AppExplorer = AccessibilityAppExplorer()
     val telemetryPort: TelemetryPort = LogcatTelemetry()
     val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))
     val policyPort: PolicyPort = DefaultPolicyEngine(skillRegistry)
@@ -100,3 +103,4 @@ class AppGraph(
         auditPort = auditPort,
     )
 }
+

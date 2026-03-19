@@ -3,23 +3,25 @@ package com.phoneclaw.app.di
 import android.content.Context
 import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
-import com.phoneclaw.app.explorer.AccessibilityAppExplorer
-import com.phoneclaw.app.explorer.AppExplorer
 import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
 import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_1_2
 import com.phoneclaw.app.data.db.PhoneClawDatabase
 import com.phoneclaw.app.executor.IntentActionExecutor
+import com.phoneclaw.app.explorer.AccessibilityAppExplorer
+import com.phoneclaw.app.explorer.AppExplorer
 import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
 import com.phoneclaw.app.gateway.ports.AuditPort
 import com.phoneclaw.app.gateway.ports.ExecutorPort
 import com.phoneclaw.app.gateway.ports.ModelPort
+import com.phoneclaw.app.gateway.ports.PageAnalysisPort
 import com.phoneclaw.app.gateway.ports.PlannerPort
 import com.phoneclaw.app.gateway.ports.PolicyPort
 import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
+import com.phoneclaw.app.learner.AiPageAnalyzer
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
 import com.phoneclaw.app.model.DefaultModelService
 import com.phoneclaw.app.model.DefaultPlanningService
@@ -85,6 +87,11 @@ class AppGraph(
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
+    val pageAnalysisPort: PageAnalysisPort = AiPageAnalyzer(
+        modelPort = modelPort,
+        allowCloud = cloudConfig.remoteEnabled,
+        preferredProvider = cloudConfig.provider,
+    )
     val sessionPort: SessionPort = RoomSessionStore(database.taskDao())
     val appScanner: AppScanner = PackageManagerAppScanner(appContext)
     val authorizationManager: AuthorizationManager = RoomAuthorizationManager(database.authorizedAppDao())
@@ -103,4 +110,3 @@ class AppGraph(
         auditPort = auditPort,
     )
 }
-

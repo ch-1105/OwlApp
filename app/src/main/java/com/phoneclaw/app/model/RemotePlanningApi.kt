@@ -26,6 +26,7 @@ enum class ModelApiStyle {
 
 
 private const val TASK_TYPE_SUMMARIZE_WEB_CONTENT = "summarize_web_content"
+private const val TASK_TYPE_PAGE_ANALYSIS = "page_analysis"
 
 data class CloudModelConfig(
     val provider: String,
@@ -65,6 +66,7 @@ class HttpCloudModelAdapter(
 
     private val planningSystemPrompt: String = buildPlanningSystemPrompt(skillRegistry)
     private val summarySystemPrompt: String = buildSummarySystemPrompt()
+    private val pageAnalysisSystemPrompt: String = buildPageAnalysisSystemPrompt()
 
     override suspend fun planAction(request: ModelRequest): ModelResponse {
         if (!config.remoteEnabled || !request.allowCloud) {
@@ -80,7 +82,12 @@ class HttpCloudModelAdapter(
 
         return withContext(Dispatchers.IO) {
             val endpoint = config.endpointPath()
-            val requestBody = config.buildRequestBody(request, planningSystemPrompt, summarySystemPrompt).toString()
+            val requestBody = config.buildRequestBody(
+                request = request,
+                planningSystemPrompt = planningSystemPrompt,
+                summarySystemPrompt = summarySystemPrompt,
+                pageAnalysisSystemPrompt = pageAnalysisSystemPrompt,
+            ).toString()
 
             val requestBuilder = Request.Builder()
                 .url(endpoint)
@@ -220,6 +227,7 @@ private fun CloudModelConfig.buildRequestBody(
     request: ModelRequest,
     planningSystemPrompt: String,
     summarySystemPrompt: String,
+    pageAnalysisSystemPrompt: String,
 ): JSONObject {
     return when (apiStyle) {
         ModelApiStyle.PHONECLAW_GATEWAY -> JSONObject()
@@ -237,7 +245,14 @@ private fun CloudModelConfig.buildRequestBody(
                 put(
                     JSONObject()
                         .put("role", "system")
-                        .put("content", if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) summarySystemPrompt else planningSystemPrompt),
+                        .put(
+                            "content",
+                            request.selectSystemPrompt(
+                                planningSystemPrompt = planningSystemPrompt,
+                                summarySystemPrompt = summarySystemPrompt,
+                                pageAnalysisSystemPrompt = pageAnalysisSystemPrompt,
+                            ),
+                        ),
                 )
                 put(
                     JSONObject()
@@ -247,7 +262,7 @@ private fun CloudModelConfig.buildRequestBody(
             })
             .put("temperature", 0)
             .put("stream", false)
-            .put("max_tokens", if (request.taskType == TASK_TYPE_SUMMARIZE_WEB_CONTENT) 768 else 512)
+            .put("max_tokens", request.maxTokens())
     }
 }
 
@@ -263,6 +278,26 @@ private fun CloudModelConfig.parseSuccessResponse(
             fallbackRequestId = request.requestId,
             taskType = request.taskType,
         )
+    }
+}
+
+private fun ModelRequest.selectSystemPrompt(
+    planningSystemPrompt: String,
+    summarySystemPrompt: String,
+    pageAnalysisSystemPrompt: String,
+): String {
+    return when (taskType) {
+        TASK_TYPE_SUMMARIZE_WEB_CONTENT -> summarySystemPrompt
+        TASK_TYPE_PAGE_ANALYSIS -> pageAnalysisSystemPrompt
+        else -> planningSystemPrompt
+    }
+}
+
+private fun ModelRequest.maxTokens(): Int {
+    return when (taskType) {
+        TASK_TYPE_SUMMARIZE_WEB_CONTENT -> 768
+        TASK_TYPE_PAGE_ANALYSIS -> 1024
+        else -> 512
     }
 }
 
@@ -341,6 +376,49 @@ private fun buildSummarySystemPrompt(): String {
         - Focus on the user question first, then list key points from the page.
         - If page content is insufficient, say what is missing.
         - Return plain text only.
+    """.trimIndent()
+}
+
+private fun buildPageAnalysisSystemPrompt(): String {
+    return """
+        You analyze Android accessibility page trees for PhoneClaw.
+        Return only one JSON object with no markdown and no explanation.
+
+        Output format:
+        {
+          "suggested_page_spec": {
+            "page_id": "snake_case_id",
+            "page_name": "Human readable page name",
+            "activity_name": "optional activity name",
+            "match_rules": [
+              { "type": "activity_name", "value": "..." },
+              { "type": "text_contains", "value": "..." }
+            ],
+            "available_actions": ["tap_wifi"],
+            "evidence_fields": {
+              "primary_signal": "..."
+            }
+          },
+          "clickable_elements": [
+            {
+              "resource_id": "optional resource id",
+              "text": "optional visible text",
+              "content_description": "optional content description",
+              "suggested_action_name": "tap_wifi",
+              "suggested_description": "Tap the Wi-Fi entry"
+            }
+          ],
+          "navigation_hints": [
+            "Short hint about how to move through this page"
+          ]
+        }
+
+        Rules:
+        - Prefer stable identifiers based on activity names or resource ids.
+        - Only include clickable elements that look meaningful to a user.
+        - Keep clickable_elements to at most 8 items.
+        - Keep navigation_hints short and concrete.
+        - If information is incomplete, still return the best effort JSON object.
     """.trimIndent()
 }
 private fun String.parseGatewayResponseOrNull(): ParsedRemoteResponse? {
@@ -500,4 +578,5 @@ private fun String.toModelApiStyle(): ModelApiStyle {
         else -> throw IllegalArgumentException("Unsupported model API style: $this")
     }
 }
+
 

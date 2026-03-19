@@ -22,6 +22,8 @@ import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.learner.AiPageAnalyzer
+import com.phoneclaw.app.learner.AiSkillLearner
+import com.phoneclaw.app.learner.SkillLearner
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
 import com.phoneclaw.app.model.DefaultModelService
 import com.phoneclaw.app.model.DefaultPlanningService
@@ -92,6 +94,11 @@ class AppGraph(
         allowCloud = cloudConfig.remoteEnabled,
         preferredProvider = cloudConfig.provider,
     )
+    val skillLearner: SkillLearner = AiSkillLearner(
+        modelPort = modelPort,
+        allowCloud = cloudConfig.remoteEnabled,
+        preferredProvider = cloudConfig.provider,
+    )
     val sessionPort: SessionPort = RoomSessionStore(database.taskDao())
     val appScanner: AppScanner = PackageManagerAppScanner(appContext)
     val authorizationManager: AuthorizationManager = RoomAuthorizationManager(database.authorizedAppDao())
@@ -110,3 +117,5 @@ class AppGraph(
         auditPort = auditPort,
     )
 }
+
+

@@ -27,6 +27,7 @@ enum class ModelApiStyle {
 
 private const val TASK_TYPE_SUMMARIZE_WEB_CONTENT = "summarize_web_content"
 private const val TASK_TYPE_PAGE_ANALYSIS = "page_analysis"
+private const val TASK_TYPE_SKILL_GENERATION = "skill_generation"
 
 data class CloudModelConfig(
     val provider: String,
@@ -67,6 +68,7 @@ class HttpCloudModelAdapter(
     private val planningSystemPrompt: String = buildPlanningSystemPrompt(skillRegistry)
     private val summarySystemPrompt: String = buildSummarySystemPrompt()
     private val pageAnalysisSystemPrompt: String = buildPageAnalysisSystemPrompt()
+    private val skillGenerationSystemPrompt: String = buildSkillGenerationSystemPrompt()
 
     override suspend fun planAction(request: ModelRequest): ModelResponse {
         if (!config.remoteEnabled || !request.allowCloud) {
@@ -87,6 +89,7 @@ class HttpCloudModelAdapter(
                 planningSystemPrompt = planningSystemPrompt,
                 summarySystemPrompt = summarySystemPrompt,
                 pageAnalysisSystemPrompt = pageAnalysisSystemPrompt,
+                skillGenerationSystemPrompt = skillGenerationSystemPrompt,
             ).toString()
 
             val requestBuilder = Request.Builder()
@@ -228,6 +231,7 @@ private fun CloudModelConfig.buildRequestBody(
     planningSystemPrompt: String,
     summarySystemPrompt: String,
     pageAnalysisSystemPrompt: String,
+    skillGenerationSystemPrompt: String,
 ): JSONObject {
     return when (apiStyle) {
         ModelApiStyle.PHONECLAW_GATEWAY -> JSONObject()
@@ -251,6 +255,7 @@ private fun CloudModelConfig.buildRequestBody(
                                 planningSystemPrompt = planningSystemPrompt,
                                 summarySystemPrompt = summarySystemPrompt,
                                 pageAnalysisSystemPrompt = pageAnalysisSystemPrompt,
+                                skillGenerationSystemPrompt = skillGenerationSystemPrompt,
                             ),
                         ),
                 )
@@ -285,10 +290,12 @@ private fun ModelRequest.selectSystemPrompt(
     planningSystemPrompt: String,
     summarySystemPrompt: String,
     pageAnalysisSystemPrompt: String,
+    skillGenerationSystemPrompt: String,
 ): String {
     return when (taskType) {
         TASK_TYPE_SUMMARIZE_WEB_CONTENT -> summarySystemPrompt
         TASK_TYPE_PAGE_ANALYSIS -> pageAnalysisSystemPrompt
+        TASK_TYPE_SKILL_GENERATION -> skillGenerationSystemPrompt
         else -> planningSystemPrompt
     }
 }
@@ -297,6 +304,7 @@ private fun ModelRequest.maxTokens(): Int {
     return when (taskType) {
         TASK_TYPE_SUMMARIZE_WEB_CONTENT -> 768
         TASK_TYPE_PAGE_ANALYSIS -> 1024
+        TASK_TYPE_SKILL_GENERATION -> 2048
         else -> 512
     }
 }
@@ -419,6 +427,64 @@ private fun buildPageAnalysisSystemPrompt(): String {
         - Keep clickable_elements to at most 8 items.
         - Keep navigation_hints short and concrete.
         - If information is incomplete, still return the best effort JSON object.
+    """.trimIndent()
+}
+
+private fun buildSkillGenerationSystemPrompt(): String {
+    return """
+        You generate learned Android app skills for PhoneClaw.
+        Return only one JSON object with no markdown and no explanation.
+
+        Output format:
+        {
+          "manifest": {
+            "schema_version": "v1alpha1",
+            "skill_id": "learned.com.example.app",
+            "skill_version": "0.1.0",
+            "skill_type": "app",
+            "display_name": "Example Learned Skill",
+            "owner": "learner",
+            "platform": "android",
+            "app_package": "com.example.app",
+            "default_risk_level": "guarded",
+            "enabled": false,
+            "actions": [
+              {
+                "action_id": "tap_wifi",
+                "display_name": "Tap Wi-Fi",
+                "description": "Open the Wi-Fi page",
+                "executor_type": "accessibility",
+                "risk_level": "guarded",
+                "requires_confirmation": true,
+                "expected_outcome": "The app navigates to Wi-Fi settings",
+                "enabled": true,
+                "example_utterances": ["Tap Wi-Fi"],
+                "match_keywords": ["wifi"]
+              }
+            ]
+          },
+          "page_graph": {
+            "schema_version": "v1alpha1",
+            "app_package": "com.example.app",
+            "pages": [],
+            "transitions": []
+          },
+          "action_bindings": [
+            {
+              "action_id": "tap_wifi",
+              "intent_action": ""
+            }
+          ]
+        }
+
+        Rules:
+        - Use executor_type = "accessibility" for learned page actions.
+        - Leave intent_action empty for non-intent actions.
+        - Keep action ids unique and snake_case.
+        - Keep display names and descriptions short and concrete.
+        - Reuse page ids and suggested action ids when they already look stable.
+        - Prefer guarded actions with requires_confirmation = true unless the action is clearly harmless.
+        - Return a complete JSON object even if the evidence is incomplete.
     """.trimIndent()
 }
 private fun String.parseGatewayResponseOrNull(): ParsedRemoteResponse? {
@@ -578,5 +644,7 @@ private fun String.toModelApiStyle(): ModelApiStyle {
         else -> throw IllegalArgumentException("Unsupported model API style: $this")
     }
 }
+
+
 
 

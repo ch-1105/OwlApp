@@ -140,6 +140,48 @@ data class PlanningTrace(
     val usedRemote: Boolean,
 )
 
+data class PageSpec(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
+    val pageId: String,
+    val pageName: String,
+    val appPackage: String,
+    val activityName: String?,
+    val matchRules: List<PageMatchRule>,
+    val availableActions: List<String>,
+    val evidenceFields: Map<String, String> = emptyMap(),
+)
+
+data class PageMatchRule(
+    val type: String,
+    val value: String,
+)
+
+data class PageGraph(
+    val schemaVersion: String = CONTRACT_SCHEMA_VERSION,
+    val appPackage: String,
+    val pages: List<PageSpec>,
+    val transitions: List<PageTransition>,
+)
+
+data class PageTransition(
+    val fromPageId: String,
+    val toPageId: String,
+    val triggerActionId: String,
+    val triggerNodeDescription: String,
+)
+
+data class ModelProfile(
+    val provider: String,
+    val modelId: String,
+    val supportsToolCalling: Boolean,
+    val supportsStructuredOutput: Boolean,
+    val supportsMultimodal: Boolean,
+    val preferredForPlanning: Boolean,
+    val preferredForSummary: Boolean,
+    val preferredForPageUnderstanding: Boolean,
+    val allowSensitiveData: Boolean,
+)
+
 data class TaskSnapshot(
     val taskId: String,
     val state: TaskState,
@@ -149,4 +191,3 @@ data class TaskSnapshot(
     val executionResult: ExecutionResult? = null,
     val errorMessage: String? = null,
 )
-

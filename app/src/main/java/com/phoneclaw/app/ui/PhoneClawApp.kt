@@ -18,6 +18,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -25,12 +27,28 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.phoneclaw.app.contracts.TaskSnapshot
 import com.phoneclaw.app.di.AppGraph
+import com.phoneclaw.app.ui.apps.AppDisplayItem
+import com.phoneclaw.app.ui.apps.AppsScreen
+import com.phoneclaw.app.ui.apps.AppsViewModel
+import com.phoneclaw.app.ui.apps.AppsViewModelFactory
+
+enum class PhoneClawTab(
+    val title: String,
+    val label: String,
+    val marker: String,
+) {
+    CHAT(title = "PhoneClaw", label = "对话", marker = "聊"),
+    APPS(title = "应用管理", label = "应用", marker = "应"),
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,58 +56,101 @@ fun PhoneClawApp(
     appGraph: AppGraph,
 ) {
     PhoneClawTheme {
-        val viewModel: MainViewModel = viewModel(
+        val chatViewModel: MainViewModel = viewModel(
             factory = MainViewModelFactory(appGraph.gateway),
         )
-        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+        val appsViewModel: AppsViewModel = viewModel(
+            factory = AppsViewModelFactory(appGraph.appScanner, appGraph.authorizationManager),
+        )
+        val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
+        val appsUiState by appsViewModel.uiState.collectAsStateWithLifecycle()
+        var selectedTab by rememberSaveable { mutableStateOf(PhoneClawTab.CHAT) }
 
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text("PhoneClaw")
+                        Text(selectedTab.title)
                     },
                 )
             },
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            ) {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    items(
-                        items = uiState.messages,
-                        key = { message -> message.id },
-                    ) { message ->
-                        ChatBubble(message = message)
-                    }
-
-                    if (uiState.isRunning) {
-                        item {
-                            RunningCard()
-                        }
-                    }
-
-                    uiState.lastTask?.let { task ->
-                        item {
-                            TaskDebugCard(task = task)
-                        }
+            bottomBar = {
+                NavigationBar {
+                    PhoneClawTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            icon = {
+                                Text(tab.marker)
+                            },
+                            label = {
+                                Text(tab.label)
+                            },
+                        )
                     }
                 }
+            },
+        ) { innerPadding ->
+            when (selectedTab) {
+                PhoneClawTab.CHAT -> ChatTabContent(
+                    uiState = chatUiState,
+                    onPromptChange = chatViewModel::onPromptChange,
+                    onSubmit = chatViewModel::submit,
+                    modifier = Modifier.padding(innerPadding),
+                )
 
-                ComposerCard(
-                    prompt = uiState.prompt,
-                    isRunning = uiState.isRunning,
-                    onPromptChange = viewModel::onPromptChange,
-                    onSubmit = viewModel::submit,
+                PhoneClawTab.APPS -> AppsScreen(
+                    uiState = appsUiState,
+                    onSearchQueryChange = appsViewModel::onSearchQueryChange,
+                    onAuthorizationToggle = appsViewModel::onAuthorizationToggle,
+                    modifier = Modifier.padding(innerPadding),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ChatTabContent(
+    uiState: MainUiState,
+    onPromptChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+    ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(
+                items = uiState.messages,
+                key = { message -> message.id },
+            ) { message ->
+                ChatBubble(message = message)
+            }
+
+            if (uiState.isRunning) {
+                item {
+                    RunningCard()
+                }
+            }
+
+            uiState.lastTask?.let { task ->
+                item {
+                    TaskDebugCard(task = task)
+                }
+            }
+        }
+
+        ComposerCard(
+            prompt = uiState.prompt,
+            isRunning = uiState.isRunning,
+            onPromptChange = onPromptChange,
+            onSubmit = onSubmit,
+        )
     }
 }
 

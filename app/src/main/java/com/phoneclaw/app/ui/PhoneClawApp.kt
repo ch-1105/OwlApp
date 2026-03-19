@@ -36,10 +36,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.phoneclaw.app.contracts.TaskSnapshot
 import com.phoneclaw.app.di.AppGraph
-import com.phoneclaw.app.ui.apps.AppDisplayItem
+import com.phoneclaw.app.explorer.AccessibilityCaptureBridge
 import com.phoneclaw.app.ui.apps.AppsScreen
 import com.phoneclaw.app.ui.apps.AppsViewModel
 import com.phoneclaw.app.ui.apps.AppsViewModelFactory
+import com.phoneclaw.app.ui.settings.AccessibilityGuideScreen
 
 enum class PhoneClawTab(
     val title: String,
@@ -48,6 +49,7 @@ enum class PhoneClawTab(
 ) {
     CHAT(title = "PhoneClaw", label = "对话", marker = "聊"),
     APPS(title = "应用管理", label = "应用", marker = "应"),
+    EXPLORE(title = "无障碍探索", label = "探索", marker = "探"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +66,8 @@ fun PhoneClawApp(
         )
         val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
         val appsUiState by appsViewModel.uiState.collectAsStateWithLifecycle()
+        val serviceConnected by AccessibilityCaptureBridge.serviceConnected.collectAsStateWithLifecycle()
+        val latestSnapshot by AccessibilityCaptureBridge.latestSnapshot.collectAsStateWithLifecycle()
         var selectedTab by rememberSaveable { mutableStateOf(PhoneClawTab.CHAT) }
 
         Scaffold(
@@ -103,6 +107,15 @@ fun PhoneClawApp(
                     uiState = appsUiState,
                     onSearchQueryChange = appsViewModel::onSearchQueryChange,
                     onAuthorizationToggle = appsViewModel::onAuthorizationToggle,
+                    modifier = Modifier.padding(innerPadding),
+                )
+
+                PhoneClawTab.EXPLORE -> AccessibilityGuideScreen(
+                    serviceConnected = serviceConnected,
+                    latestSnapshot = latestSnapshot,
+                    onRefreshSnapshot = {
+                        AccessibilityCaptureBridge.captureCurrentPageTree()
+                    },
                     modifier = Modifier.padding(innerPadding),
                 )
             }

@@ -21,7 +21,9 @@ class RoomSkillStore(
 ) : SkillStore {
     override fun loadAllEnabledActions(): List<RegisteredSkillAction> {
         return loadAllSkills()
-            .filter { it.enabled }
+            .filter { record ->
+                record.enabled && record.reviewStatus == SKILL_REVIEW_APPROVED
+            }
             .flatMap { record ->
                 SkillPackageDefinition(
                     manifest = record.manifest.copy(enabled = record.enabled),

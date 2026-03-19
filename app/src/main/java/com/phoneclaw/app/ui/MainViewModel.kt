@@ -73,18 +73,39 @@ class MainViewModel(
             }
 
             val result = gateway.submitUserMessage(prompt)
-            _uiState.update { current ->
-                current.copy(
-                    isRunning = false,
-                    lastTask = result,
-                    messages = current.messages + result.toAssistantMessage(),
-                )
-            }
+            publishTaskResult(result)
         }
+    }
+
+    fun confirmTask(taskId: String) {
+        resolveConfirmation(taskId, approved = true)
+    }
+
+    fun cancelTask(taskId: String) {
+        resolveConfirmation(taskId, approved = false)
     }
 
     fun usePromptSuggestion(prompt: String) {
         _uiState.update { current -> current.copy(prompt = prompt) }
+    }
+
+    private fun resolveConfirmation(taskId: String, approved: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { current -> current.copy(isRunning = true) }
+
+            val result = gateway.confirmAction(taskId, approved)
+            publishTaskResult(result)
+        }
+    }
+
+    private fun publishTaskResult(result: TaskSnapshot) {
+        _uiState.update { current ->
+            current.copy(
+                isRunning = false,
+                lastTask = result,
+                messages = current.messages + result.toAssistantMessage(),
+            )
+        }
     }
 
     private fun TaskSnapshot.toAssistantMessage(): ChatMessage {
@@ -120,10 +141,32 @@ class MainViewModel(
                     }
                 }
 
+                TaskState.NEEDS_CLARIFICATION -> {
+                    append("还需要你补充一点信息，我才能继续。")
+                    errorMessage?.let { error ->
+                        append("\n需要补充：$error")
+                    }
+                }
+
+                TaskState.AWAITING_CONFIRMATION -> {
+                    append("这次操作需要你确认后我才会继续执行。")
+                    actionSpec?.let { action ->
+                        append("\n动作：${action.actionId}")
+                        append("\n说明：${action.intentSummary}")
+                    }
+                }
+
                 TaskState.REFUSED -> {
                     append("这次请求我没有执行。")
                     errorMessage?.let { error ->
                         append("\n原因：$error")
+                    }
+                }
+
+                TaskState.CANCELLED -> {
+                    append("这次请求已经取消。")
+                    errorMessage?.let { error ->
+                        append("\n说明：$error")
                     }
                 }
 
@@ -152,7 +195,7 @@ class MainViewModel(
         }
 
         return ChatMessage(
-            id = taskId,
+            id = "${taskId}-${state.name.lowercase()}",
             role = ChatRole.ASSISTANT,
             text = content,
             taskState = state,
@@ -171,4 +214,3 @@ class MainViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
-

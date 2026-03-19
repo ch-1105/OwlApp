@@ -11,6 +11,7 @@ enum class RiskLevel {
 enum class TaskState {
     RECEIVED,
     PLANNING,
+    NEEDS_CLARIFICATION,
     AWAITING_CONFIRMATION,
     APPROVED,
     REFUSED,

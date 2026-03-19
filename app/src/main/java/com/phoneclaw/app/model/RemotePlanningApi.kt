@@ -383,7 +383,7 @@ private fun String.parseOpenAiChatResponseOrNull(
             )
         }
 
-        val contentJson = content.extractJsonObjectOrNull()?.let(::JSONObject)
+        val contentJson = StructuredJsonContentParser.parseJsonTextOrNull(content)?.let(::JSONObject)
         ParsedRemoteResponse(
             requestId = fallbackRequestId,
             provider = provider,
@@ -431,24 +431,28 @@ private fun JSONObject.extractAssistantContent(): String {
     }
 }
 
-private fun String.extractJsonObjectOrNull(): String? {
-    val cleaned = trim()
-        .removePrefix("```json")
-        .removePrefix("```")
-        .removeSuffix("```")
-        .trim()
+internal object StructuredJsonContentParser {
+    fun parseJsonTextOrNull(content: String): String? {
+        val trimmed = content.trim()
+        if (trimmed.isBlank()) return null
 
-    if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
-        return cleaned
+        parseFencedJsonBlock(trimmed)?.let { return it }
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            return trimmed
+        }
+
+        return null
     }
 
-    val start = cleaned.indexOf('{')
-    val end = cleaned.lastIndexOf('}')
-    return if (start >= 0 && end > start) {
-        cleaned.substring(start, end + 1)
-    } else {
-        null
+    private fun parseFencedJsonBlock(content: String): String? {
+        val match = fencedJsonPattern.matchEntire(content) ?: return null
+        return match.groupValues[1].trim()
     }
+
+    private val fencedJsonPattern = Regex(
+        pattern = "^```(?:json)?\\s*(\\{[\\s\\S]*})\\s*```$",
+        option = RegexOption.IGNORE_CASE,
+    )
 }
 
 private fun JSONObject.toPlannedActionPayload(): PlannedActionPayload {

@@ -12,15 +12,16 @@ import com.phoneclaw.app.data.db.PhoneClawDatabase
 import com.phoneclaw.app.skills.JsonSkillLoader
 import com.phoneclaw.app.skills.SkillActionBinding
 import com.phoneclaw.app.skills.StoreBackedSkillRegistry
+import java.io.File
+import java.nio.file.Files
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
-import java.io.File
-import java.nio.file.Files
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
@@ -51,9 +52,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun loadAllEnabledActions_mergesBuiltinAndLearnedSkills() {
-        assertEquals(setOf("open_builtin_settings"), store.loadAllEnabledActions().map { it.actionId }.toSet())
-
+    fun loadAllEnabledActions_keepsPendingLearnedSkillOutOfRuntimeRegistry() {
         store.saveLearnedSkill(
             manifest = learnedManifest(enabled = true),
             bindings = listOf(
@@ -64,14 +63,13 @@ class RoomSkillStoreTest {
             ),
         )
 
-        val actionIds = store.loadAllEnabledActions().map { it.actionId }.toSet()
         assertEquals(
-            setOf("open_builtin_settings", "open_learned_page"),
-            actionIds,
+            setOf("open_builtin_settings"),
+            store.loadAllEnabledActions().map { it.actionId }.toSet(),
         )
 
         val registry = StoreBackedSkillRegistry(store)
-        assertNotNull(registry.findAction("open_learned_page"))
+        assertNull(registry.findAction("open_learned_page"))
 
         val learnedRecord = store.loadAllSkills().first { it.skillId == "sample.learned" }
         assertEquals(SKILL_SOURCE_LEARNED, learnedRecord.source)
@@ -79,18 +77,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun setSkillEnabled_persistsBuiltinOverrides() {
-        store.setSkillEnabled("sample.builtin", enabled = false)
-
-        assertEquals(emptyList<String>(), store.loadAllEnabledActions().map { it.actionId })
-
-        val builtinRecord = store.loadAllSkills().first { it.skillId == "sample.builtin" }
-        assertEquals(false, builtinRecord.enabled)
-        assertEquals(SKILL_SOURCE_BUILTIN, builtinRecord.source)
-    }
-
-    @Test
-    fun updateReviewStatus_updatesStoredSkillMetadata() {
+    fun updateReviewStatus_approvedSkillEntersRuntimeRegistry() {
         store.saveLearnedSkill(
             manifest = learnedManifest(enabled = true),
             bindings = listOf(
@@ -103,8 +90,27 @@ class RoomSkillStoreTest {
 
         store.updateReviewStatus("sample.learned", SKILL_REVIEW_APPROVED)
 
+        assertEquals(
+            setOf("open_builtin_settings", "open_learned_page"),
+            store.loadAllEnabledActions().map { it.actionId }.toSet(),
+        )
+
+        val registry = StoreBackedSkillRegistry(store)
+        assertNotNull(registry.findAction("open_learned_page"))
+
         val learnedRecord = store.loadAllSkills().first { it.skillId == "sample.learned" }
         assertEquals(SKILL_REVIEW_APPROVED, learnedRecord.reviewStatus)
+    }
+
+    @Test
+    fun setSkillEnabled_persistsBuiltinOverrides() {
+        store.setSkillEnabled("sample.builtin", enabled = false)
+
+        assertEquals(emptyList<String>(), store.loadAllEnabledActions().map { it.actionId })
+
+        val builtinRecord = store.loadAllSkills().first { it.skillId == "sample.builtin" }
+        assertEquals(false, builtinRecord.enabled)
+        assertEquals(SKILL_SOURCE_BUILTIN, builtinRecord.source)
     }
 }
 

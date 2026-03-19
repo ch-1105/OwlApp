@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.phoneclaw.app.contracts.TaskSnapshot
+import com.phoneclaw.app.contracts.TaskState
 import com.phoneclaw.app.di.AppGraph
 import com.phoneclaw.app.explorer.AccessibilityCaptureBridge
 import com.phoneclaw.app.ui.apps.AppsScreen
@@ -100,6 +101,9 @@ fun PhoneClawApp(
                     uiState = chatUiState,
                     onPromptChange = chatViewModel::onPromptChange,
                     onSubmit = chatViewModel::submit,
+                    onConfirmTask = chatViewModel::confirmTask,
+                    onCancelTask = chatViewModel::cancelTask,
+                    isRunning = chatUiState.isRunning,
                     modifier = Modifier.padding(innerPadding),
                 )
 
@@ -128,6 +132,9 @@ private fun ChatTabContent(
     uiState: MainUiState,
     onPromptChange: (String) -> Unit,
     onSubmit: () -> Unit,
+    onConfirmTask: (String) -> Unit,
+    onCancelTask: (String) -> Unit,
+    isRunning: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -153,7 +160,12 @@ private fun ChatTabContent(
 
             uiState.lastTask?.let { task ->
                 item {
-                    TaskDebugCard(task = task)
+                    TaskDebugCard(
+                        task = task,
+                        onConfirmTask = onConfirmTask,
+                        onCancelTask = onCancelTask,
+                        isRunning = isRunning,
+                    )
                 }
             }
         }
@@ -240,6 +252,9 @@ private fun RunningCard() {
 @Composable
 private fun TaskDebugCard(
     task: TaskSnapshot,
+    onConfirmTask: (String) -> Unit,
+    onCancelTask: (String) -> Unit,
+    isRunning: Boolean,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -254,6 +269,33 @@ private fun TaskDebugCard(
             task.actionSpec?.let { action ->
                 Text("Action: ${action.actionId}")
                 Text("Skill: ${action.skillId}")
+            }
+            if (task.state == TaskState.AWAITING_CONFIRMATION) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "这次操作已经规划完成，确认后才会真正执行。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Button(
+                        onClick = { onCancelTask(task.taskId) },
+                        enabled = !isRunning,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("取消")
+                    }
+                    Button(
+                        onClick = { onConfirmTask(task.taskId) },
+                        enabled = !isRunning,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("确认执行")
+                    }
+                }
             }
             task.planningTrace?.let { trace ->
                 Spacer(modifier = Modifier.height(12.dp))

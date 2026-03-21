@@ -41,7 +41,9 @@ import com.phoneclaw.app.explorer.AccessibilityCaptureBridge
 import com.phoneclaw.app.ui.apps.AppsScreen
 import com.phoneclaw.app.ui.apps.AppsViewModel
 import com.phoneclaw.app.ui.apps.AppsViewModelFactory
-import com.phoneclaw.app.ui.settings.AccessibilityGuideScreen
+import com.phoneclaw.app.ui.explore.ExploreScreen
+import com.phoneclaw.app.ui.explore.ExploreViewModel
+import com.phoneclaw.app.ui.explore.ExploreViewModelFactory
 
 enum class PhoneClawTab(
     val title: String,
@@ -50,7 +52,7 @@ enum class PhoneClawTab(
 ) {
     CHAT(title = "PhoneClaw", label = "对话", marker = "聊"),
     APPS(title = "应用管理", label = "应用", marker = "应"),
-    EXPLORE(title = "无障碍探索", label = "探索", marker = "探"),
+    EXPLORE(title = "页面学习", label = "学习", marker = "学"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,8 +67,16 @@ fun PhoneClawApp(
         val appsViewModel: AppsViewModel = viewModel(
             factory = AppsViewModelFactory(appGraph.appScanner, appGraph.authorizationManager),
         )
+        val exploreViewModel: ExploreViewModel = viewModel(
+            factory = ExploreViewModelFactory(
+                appScanner = appGraph.appScanner,
+                learningSessionManager = appGraph.learningSessionManager,
+                skillStore = appGraph.skillStore,
+            ),
+        )
         val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
         val appsUiState by appsViewModel.uiState.collectAsStateWithLifecycle()
+        val exploreUiState by exploreViewModel.uiState.collectAsStateWithLifecycle()
         val serviceConnected by AccessibilityCaptureBridge.serviceConnected.collectAsStateWithLifecycle()
         val latestSnapshot by AccessibilityCaptureBridge.latestSnapshot.collectAsStateWithLifecycle()
         var selectedTab by rememberSaveable { mutableStateOf(PhoneClawTab.CHAT) }
@@ -114,12 +124,20 @@ fun PhoneClawApp(
                     modifier = Modifier.padding(innerPadding),
                 )
 
-                PhoneClawTab.EXPLORE -> AccessibilityGuideScreen(
+                PhoneClawTab.EXPLORE -> ExploreScreen(
                     serviceConnected = serviceConnected,
                     latestSnapshot = latestSnapshot,
+                    uiState = exploreUiState,
                     onRefreshSnapshot = {
                         AccessibilityCaptureBridge.captureCurrentPageTree()
                     },
+                    onStartLearning = exploreViewModel::startLearning,
+                    onCaptureCurrentPage = exploreViewModel::captureCurrentPage,
+                    onTapAndCapture = exploreViewModel::tapAndCapture,
+                    onFinishExploration = exploreViewModel::finishExploration,
+                    onApproveSkill = exploreViewModel::approveSkill,
+                    onRejectSkill = exploreViewModel::rejectSkill,
+                    onDraftDisplayNameChange = exploreViewModel::onDraftDisplayNameChange,
                     modifier = Modifier.padding(innerPadding),
                 )
             }

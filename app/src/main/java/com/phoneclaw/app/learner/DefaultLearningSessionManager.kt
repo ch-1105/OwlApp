@@ -1,7 +1,9 @@
 package com.phoneclaw.app.learner
 
+import com.phoneclaw.app.explorer.AccessibilityNodeSnapshot
 import com.phoneclaw.app.explorer.AppExplorer
 import com.phoneclaw.app.explorer.ExplorationResult
+import com.phoneclaw.app.explorer.PageTreeSnapshot
 import com.phoneclaw.app.gateway.ports.PageAnalysisPort
 import java.util.UUID
 
@@ -49,6 +51,16 @@ class DefaultLearningSessionManager(
                 session = session.copy(status = LearningStatus.EXPLORING),
                 message = "请先采集当前页面，再执行点击学习。",
             )
+
+        val currentPage = appExplorer.captureCurrentPage()
+            ?: return failAndThrow(sessionId, "点击学习前没有可用的前台页面。")
+        if (!currentPage.pageTree.matchesLearningSource(sourcePage.pageTree)) {
+            return rejectAndThrow(
+                sessionId = sessionId,
+                session = session.copy(status = LearningStatus.EXPLORING),
+                message = "当前前台页面已经变化，请先重新采集当前页面，再继续点击学习。",
+            )
+        }
 
         val exploration = appExplorer.performClick(nodeId)
             ?: return failAndThrow(sessionId, "点击节点 `$nodeId` 后没有采集到新页面。")
@@ -106,6 +118,10 @@ class DefaultLearningSessionManager(
 
     override fun getSessionState(sessionId: String): LearningSessionState? {
         return sessions[sessionId]
+    }
+
+    override fun discardSession(sessionId: String) {
+        sessions.remove(sessionId)
     }
 
     private suspend fun analyzeExploration(
@@ -228,6 +244,35 @@ class DefaultLearningSessionManager(
     }
 }
 
+private fun PageTreeSnapshot.matchesLearningSource(other: PageTreeSnapshot): Boolean {
+    if (packageName != other.packageName) {
+        return false
+    }
+    if (activityName != other.activityName) {
+        return false
+    }
+    return learningFingerprint() == other.learningFingerprint()
+}
+
+private fun PageTreeSnapshot.learningFingerprint(): List<String> {
+    return nodes.flatMap { node -> node.learningFingerprint() }
+        .take(24)
+}
+
+private fun AccessibilityNodeSnapshot.learningFingerprint(): List<String> {
+    val current = listOf(
+        listOf(
+            className.orEmpty(),
+            text.orEmpty(),
+            contentDescription.orEmpty(),
+            resourceId.orEmpty(),
+            isClickable.toString(),
+            children.size.toString(),
+        ).joinToString("|"),
+    )
+    return current + children.flatMap { child -> child.learningFingerprint() }
+}
+
 private data class PendingTransition(
     val fromPageId: String,
     val triggerNodeId: String,
@@ -242,4 +287,6 @@ private data class PendingTransition(
         )
     }
 }
+
+
 

@@ -52,4 +52,7 @@ interface LearningSessionManager {
     suspend fun finishExploration(sessionId: String): LearnedSkillDraft
 
     fun getSessionState(sessionId: String): LearningSessionState?
+
+    fun discardSession(sessionId: String)
 }
+

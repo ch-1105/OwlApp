@@ -121,6 +121,53 @@ class DefaultLearningSessionManagerTest {
         assertEquals(transition, learnerPage.arrivedBy)
         assertArrayEquals(byteArrayOf(2), learnerPage.screenshotBytes)
     }
+    @Test
+    fun tapAndCapture_rejectsWhenForegroundPageHasDriftedSinceLastCapture() = runTest {
+        val pageOne = sampleExplorationResult(
+            pageId = "wifi_settings",
+            pageName = "Wi-Fi",
+            timestamp = 10L,
+        )
+        val driftedPage = sampleExplorationResult(
+            pageId = "advanced_settings",
+            pageName = "Advanced",
+            timestamp = 15L,
+        )
+        val explorer = FakeAppExplorer(
+            captureResults = listOf(pageOne, driftedPage),
+            clickResults = mapOf(
+                "0/0" to sampleExplorationResult(
+                    pageId = "details_settings",
+                    pageName = "Details",
+                    timestamp = 20L,
+                ),
+            ),
+        )
+        val manager = DefaultLearningSessionManager(
+            appExplorer = explorer,
+            pageAnalysisPort = FakePageAnalysisPort(),
+            skillLearner = FakeSkillLearner(sampleDraft()),
+            sessionIdFactory = { "session-drift" },
+        )
+
+        val sessionId = manager.startLearning(
+            appPackage = "com.example.settings",
+            appName = "Settings",
+        )
+        manager.captureAndAnalyze(sessionId)
+
+        try {
+            manager.tapAndCapture(sessionId, nodeId = "0/0", nodeDescription = "Advanced row")
+            fail("Expected tapAndCapture to reject a drifted foreground page.")
+        } catch (expected: IllegalStateException) {
+            assertTrue(expected.message.orEmpty().contains("重新采集当前页面"))
+        }
+
+        val state = requireNotNull(manager.getSessionState(sessionId))
+        assertEquals(LearningStatus.EXPLORING, state.status)
+        assertTrue(state.errorMessage.orEmpty().contains("重新采集当前页面"))
+        assertTrue(explorer.clickedNodeIds.isEmpty())
+    }
 
     @Test
     fun captureAndAnalyze_marksSessionFailedWhenForegroundAppDoesNotMatch() = runTest {
@@ -445,3 +492,4 @@ private fun sampleDraft(): LearnedSkillDraft {
         evidence = emptyList(),
     )
 }
+

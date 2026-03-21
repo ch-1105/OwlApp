@@ -12,6 +12,7 @@ import com.phoneclaw.app.contracts.SkillManifest
 import com.phoneclaw.app.explorer.AccessibilityNodeSnapshot
 import com.phoneclaw.app.explorer.PageTreeSnapshot
 import com.phoneclaw.app.explorer.totalNodeCount
+import com.phoneclaw.app.gateway.ports.ClickableElementSuggestion
 import com.phoneclaw.app.gateway.ports.ModelPort
 import com.phoneclaw.app.model.StructuredJsonContentParser
 import com.phoneclaw.app.skills.SkillActionBinding
@@ -139,6 +140,9 @@ private fun parseDraft(
         require(draft.isConsistent()) {
             "Generated skill draft is internally inconsistent."
         }
+        require(draft.matchesObservedTransitions(pages)) {
+            "Generated skill draft does not match observed exploration transitions."
+        }
 
         draft
     }.getOrNull()
@@ -167,6 +171,22 @@ private fun LearnedSkillDraft.isConsistent(): Boolean {
     return true
 }
 
+private fun LearnedSkillDraft.matchesObservedTransitions(pages: List<PageLearningInput>): Boolean {
+    val observedTransitions = pages.mapNotNull { page ->
+        page.arrivedBy?.toObservedTransitionKey()
+    }.toSet()
+
+    if (observedTransitions.isEmpty()) {
+        return true
+    }
+
+    val draftTransitions = pageGraph.transitions.map { transition ->
+        transition.toObservedTransitionKey()
+    }.toSet()
+
+    return draftTransitions == observedTransitions
+}
+
 private fun buildFallbackDraft(
     appPackage: String,
     appName: String,
@@ -177,6 +197,10 @@ private fun buildFallbackDraft(
         page.toGeneratedPage(appName = appName, usedActionIds = usedActionIds)
     }
     val pageSpecs = mergePageSpecs(generatedPages.map { it.pageSpec })
+    val transitions = buildFallbackTransitions(
+        pages = pages,
+        generatedPages = generatedPages,
+    )
     val actions = generatedPages.flatMap { it.actions }
     val manifest = SkillManifest(
         schemaVersion = CONTRACT_SCHEMA_VERSION,
@@ -210,7 +234,7 @@ private fun buildFallbackDraft(
             schemaVersion = CONTRACT_SCHEMA_VERSION,
             appPackage = appPackage,
             pages = pageSpecs,
-            transitions = emptyList(),
+            transitions = transitions,
         ),
         bindings = bindings,
         evidence = buildEvidence(pages),
@@ -346,15 +370,134 @@ private fun mergePageSpecs(pages: List<PageSpec>): List<PageSpec> {
     return merged.values.toList()
 }
 
+private fun buildFallbackTransitions(
+    pages: List<PageLearningInput>,
+    generatedPages: List<GeneratedPage>,
+): List<PageTransition> {
+    val sourceInputById = pages.associateBy { it.analysis.suggestedPageSpec.pageId }
+    val sourceGeneratedById = generatedPages.associateBy { it.pageSpec.pageId }
+
+    return pages.mapNotNull { page ->
+        val transition = page.arrivedBy ?: return@mapNotNull null
+        val sourceInput = sourceInputById[transition.fromPageId] ?: return@mapNotNull null
+        val sourceGenerated = sourceGeneratedById[transition.fromPageId] ?: return@mapNotNull null
+        val triggerActionId = resolveTriggerActionId(
+            sourceInput = sourceInput,
+            sourceGenerated = sourceGenerated,
+            transition = transition,
+        ) ?: return@mapNotNull null
+
+        PageTransition(
+            fromPageId = transition.fromPageId,
+            toPageId = transition.toPageId,
+            triggerActionId = triggerActionId,
+            triggerNodeDescription = transition.triggerNodeDescription,
+        )
+    }.distinctBy { transition ->
+        "${transition.fromPageId}:${transition.toPageId}:${transition.triggerActionId}:${transition.triggerNodeDescription}"
+    }
+}
+
+private fun resolveTriggerActionId(
+    sourceInput: PageLearningInput,
+    sourceGenerated: GeneratedPage,
+    transition: ExplorationTransition,
+): String? {
+    val generatedActionIds = sourceGenerated.pageSpec.availableActions
+    if (generatedActionIds.size == 1) {
+        return generatedActionIds.single()
+    }
+
+    val normalizedTriggerValues = transition.toMatchValues()
+    if (normalizedTriggerValues.isEmpty()) {
+        return generatedActionIds.singleOrNull()
+    }
+
+    val matchedActionIds = sourceInput.analysis.clickableElements
+        .zip(sourceGenerated.actions)
+        .filter { (suggestion, _) -> suggestion.matchesTransition(normalizedTriggerValues) }
+        .map { (_, action) -> action.actionId }
+        .distinct()
+
+    if (matchedActionIds.size == 1) {
+        return matchedActionIds.single()
+    }
+
+    return generatedActionIds.singleOrNull()
+}
+
 private fun buildEvidence(pages: List<PageLearningInput>): List<LearningEvidence> {
     return pages.map { page ->
         LearningEvidence(
             pageId = page.analysis.suggestedPageSpec.pageId,
             snapshotJson = page.pageTree.toSnapshotJson(),
             screenshotPath = page.screenshotPath,
+            screenshotBytes = page.screenshotBytes,
+            arrivedBy = page.arrivedBy,
             capturedAt = page.capturedAt,
         )
     }
+}
+
+private fun ExplorationTransition?.toPromptLine(): String {
+    if (this == null) {
+        return "initial capture"
+    }
+
+    return "$fromPageId -> $toPageId via $triggerNodeDescription ($triggerNodeId)"
+}
+
+private fun ExplorationTransition.toMatchValues(): Set<String> {
+    return listOf(triggerNodeId, triggerNodeDescription)
+        .mapNotNull { value -> value.normalizeMatchValue() }
+        .toSet()
+}
+
+private fun ExplorationTransition.toObservedTransitionKey(): ObservedTransitionKey {
+    return ObservedTransitionKey(
+        fromPageId = fromPageId,
+        toPageId = toPageId,
+        triggerNodeDescription = triggerNodeDescription.normalizeMatchValue().orEmpty(),
+    )
+}
+
+private fun PageTransition.toObservedTransitionKey(): ObservedTransitionKey {
+    return ObservedTransitionKey(
+        fromPageId = fromPageId,
+        toPageId = toPageId,
+        triggerNodeDescription = triggerNodeDescription.normalizeMatchValue().orEmpty(),
+    )
+}
+
+private fun ClickableElementSuggestion.matchesTransition(triggerValues: Set<String>): Boolean {
+    val candidateValues = listOf(
+        resourceId,
+        text,
+        contentDescription,
+        suggestedActionName,
+        suggestedDescription,
+    ).mapNotNull { value -> value.normalizeMatchValue() }
+
+    if (candidateValues.isEmpty()) {
+        return false
+    }
+
+    return candidateValues.any { candidate ->
+        triggerValues.any { trigger ->
+            candidate == trigger ||
+                candidate.contains(trigger) ||
+                trigger.contains(candidate)
+        }
+    }
+}
+
+private fun String?.normalizeMatchValue(): String? {
+    val normalized = this?.trim()?.lowercase().orEmpty()
+    if (normalized.isBlank()) {
+        return null
+    }
+
+    return normalized
 }
 
 private fun PageLearningInput.toModelInput(): String {
@@ -377,6 +520,8 @@ private fun PageLearningInput.toModelInput(): String {
             clickableLines.forEach(::appendLine)
         }
         appendLine("Navigation hints: ${analysis.navigationHints.joinToString(" | ")}")
+        appendLine("Arrived by: ${arrivedBy.toPromptLine()}")
+        appendLine("Screenshot attached: ${screenshotBytes != null || !screenshotPath.isNullOrBlank()}")
         appendLine("Snapshot summary:")
         append(pageTree.toCompactSummary())
     }.trim()
@@ -796,6 +941,9 @@ private data class GeneratedPage(
     val actions: List<SkillActionManifest>,
 )
 
-
-
+private data class ObservedTransitionKey(
+    val fromPageId: String,
+    val toPageId: String,
+    val triggerNodeDescription: String,
+)
 

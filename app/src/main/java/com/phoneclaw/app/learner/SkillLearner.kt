@@ -17,6 +17,8 @@ data class LearningEvidence(
     val pageId: String,
     val snapshotJson: String,
     val screenshotPath: String?,
+    val screenshotBytes: ByteArray? = null,
+    val arrivedBy: ExplorationTransition? = null,
     val capturedAt: Long,
 )
 
@@ -24,6 +26,8 @@ data class PageLearningInput(
     val pageTree: PageTreeSnapshot,
     val analysis: PageAnalysisResult,
     val screenshotPath: String? = null,
+    val screenshotBytes: ByteArray? = null,
+    val arrivedBy: ExplorationTransition? = null,
     val capturedAt: Long,
 )
 

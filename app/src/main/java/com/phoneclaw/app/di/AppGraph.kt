@@ -23,6 +23,8 @@ import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.learner.AiPageAnalyzer
 import com.phoneclaw.app.learner.AiSkillLearner
+import com.phoneclaw.app.learner.DefaultLearningSessionManager
+import com.phoneclaw.app.learner.LearningSessionManager
 import com.phoneclaw.app.learner.SkillLearner
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
 import com.phoneclaw.app.model.DefaultModelService
@@ -103,6 +105,11 @@ class AppGraph(
     val appScanner: AppScanner = PackageManagerAppScanner(appContext)
     val authorizationManager: AuthorizationManager = RoomAuthorizationManager(database.authorizedAppDao())
     val appExplorer: AppExplorer = AccessibilityAppExplorer()
+    val learningSessionManager: LearningSessionManager = DefaultLearningSessionManager(
+        appExplorer = appExplorer,
+        pageAnalysisPort = pageAnalysisPort,
+        skillLearner = skillLearner,
+    )
     val telemetryPort: TelemetryPort = LogcatTelemetry()
     val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))
     val policyPort: PolicyPort = DefaultPolicyEngine(skillRegistry)
@@ -117,5 +124,4 @@ class AppGraph(
         auditPort = auditPort,
     )
 }
-
 

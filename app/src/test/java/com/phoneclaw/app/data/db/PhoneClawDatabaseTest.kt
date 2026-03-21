@@ -1,9 +1,11 @@
 package com.phoneclaw.app.data.db
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -18,10 +20,11 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class PhoneClawDatabaseTest {
     private lateinit var database: PhoneClawDatabase
+    private lateinit var context: Context
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(context, PhoneClawDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -61,6 +64,8 @@ class PhoneClawDatabaseTest {
             skillId = "browser.web",
             manifestJson = "{}",
             bindingsJson = "[]",
+            pageGraphJson = "{\"pages\":[]}",
+            evidenceJson = "[]",
             source = "builtin",
             enabled = true,
             reviewStatus = "approved",
@@ -103,4 +108,114 @@ class PhoneClawDatabaseTest {
         database.authorizedAppDao().deleteById(app.packageName)
         assertNull(database.authorizedAppDao().getById(app.packageName))
     }
+
+    @Test
+    fun migration_2_3_addsLearnedSkillArtifactColumnsWithDefaults() = runBlocking {
+        val databaseName = "phoneclaw-migration-2-3-test.db"
+        context.deleteDatabase(databaseName)
+
+        createVersion2SkillsDatabase(context.getDatabasePath(databaseName))
+
+        val migratedDatabase = Room.databaseBuilder(
+            context,
+            PhoneClawDatabase::class.java,
+            databaseName,
+        )
+            .addMigrations(PHONECLAW_DB_MIGRATION_1_2, PHONECLAW_DB_MIGRATION_2_3)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val skill = requireNotNull(migratedDatabase.skillDao().getById("browser.web"))
+
+            assertNull(skill.pageGraphJson)
+            assertEquals("[]", skill.evidenceJson)
+            assertEquals("builtin", skill.source)
+            assertEquals(true, skill.enabled)
+        } finally {
+            migratedDatabase.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
 }
+
+private fun createVersion2SkillsDatabase(databaseFile: File) {
+    databaseFile.parentFile?.mkdirs()
+    val rawDatabase = SQLiteDatabase.openOrCreateDatabase(databaseFile, null)
+
+    try {
+        rawDatabase.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS tasks (
+                taskId TEXT NOT NULL PRIMARY KEY,
+                sessionId TEXT NOT NULL,
+                userMessage TEXT NOT NULL,
+                state TEXT NOT NULL,
+                actionSpecJson TEXT,
+                executionResultJson TEXT,
+                planningTraceJson TEXT,
+                errorMessage TEXT,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        rawDatabase.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS authorized_apps (
+                packageName TEXT NOT NULL PRIMARY KEY,
+                appName TEXT NOT NULL,
+                authorized INTEGER NOT NULL,
+                authorizedAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        rawDatabase.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS skills (
+                skillId TEXT NOT NULL PRIMARY KEY,
+                manifestJson TEXT NOT NULL,
+                bindingsJson TEXT NOT NULL DEFAULT '[]',
+                source TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                reviewStatus TEXT NOT NULL,
+                learnedAt INTEGER,
+                appVersion TEXT,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        rawDatabase.execSQL(
+            """
+            INSERT INTO skills (
+                skillId,
+                manifestJson,
+                bindingsJson,
+                source,
+                enabled,
+                reviewStatus,
+                learnedAt,
+                appVersion,
+                createdAt,
+                updatedAt
+            ) VALUES (
+                'browser.web',
+                '{}',
+                '[]',
+                'builtin',
+                1,
+                'approved',
+                NULL,
+                NULL,
+                10,
+                10
+            )
+            """.trimIndent(),
+        )
+        rawDatabase.version = 2
+    } finally {
+        rawDatabase.close()
+    }
+}
+

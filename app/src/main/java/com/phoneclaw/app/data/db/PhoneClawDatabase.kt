@@ -15,13 +15,24 @@ val PHONECLAW_DB_MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+val PHONECLAW_DB_MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE skills ADD COLUMN pageGraphJson TEXT",
+        )
+        db.execSQL(
+            "ALTER TABLE skills ADD COLUMN evidenceJson TEXT NOT NULL DEFAULT '[]'",
+        )
+    }
+}
+
 @Database(
     entities = [
         TaskEntity::class,
         SkillEntity::class,
         AuthorizedAppEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class PhoneClawDatabase : RoomDatabase() {

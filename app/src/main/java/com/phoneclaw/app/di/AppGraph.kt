@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
 import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
 import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_1_2
+import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_2_3
 import com.phoneclaw.app.data.db.PhoneClawDatabase
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.explorer.AccessibilityAppExplorer
@@ -54,7 +55,7 @@ class AppGraph(
         PhoneClawDatabase::class.java,
         PHONECLAW_DATABASE_NAME,
     )
-        .addMigrations(PHONECLAW_DB_MIGRATION_1_2)
+        .addMigrations(PHONECLAW_DB_MIGRATION_1_2, PHONECLAW_DB_MIGRATION_2_3)
         .build()
 
     private val builtinSkillLoader = JsonSkillLoader.fromAssets(appContext.assets)
@@ -124,4 +125,3 @@ class AppGraph(
         auditPort = auditPort,
     )
 }
-

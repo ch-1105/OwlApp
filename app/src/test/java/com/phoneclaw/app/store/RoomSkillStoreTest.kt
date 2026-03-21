@@ -5,16 +5,23 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.phoneclaw.app.contracts.CONTRACT_SCHEMA_VERSION
+import com.phoneclaw.app.contracts.PageGraph
+import com.phoneclaw.app.contracts.PageMatchRule
+import com.phoneclaw.app.contracts.PageSpec
+import com.phoneclaw.app.contracts.PageTransition
 import com.phoneclaw.app.contracts.RiskLevel
 import com.phoneclaw.app.contracts.SkillActionManifest
 import com.phoneclaw.app.contracts.SkillManifest
 import com.phoneclaw.app.data.db.PhoneClawDatabase
+import com.phoneclaw.app.learner.ExplorationTransition
+import com.phoneclaw.app.learner.LearningEvidence
 import com.phoneclaw.app.skills.JsonSkillLoader
 import com.phoneclaw.app.skills.SkillActionBinding
 import com.phoneclaw.app.skills.StoreBackedSkillRegistry
 import java.io.File
 import java.nio.file.Files
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -103,6 +110,68 @@ class RoomSkillStoreTest {
     }
 
     @Test
+    fun saveLearnedSkill_persistsPageGraphAndEvidence() {
+        store.saveLearnedSkill(
+            manifest = learnedManifest(enabled = true),
+            bindings = listOf(
+                SkillActionBinding(
+                    actionId = "open_learned_page",
+                    intentAction = "android.intent.action.VIEW",
+                ),
+            ),
+            pageGraph = learnedPageGraph(),
+            evidence = learnedEvidence(),
+        )
+
+        val learnedRecord = store.loadAllSkills().first { it.skillId == "sample.learned" }
+        val evidence = learnedRecord.evidence.single()
+        val transition = requireNotNull(evidence.arrivedBy)
+
+        assertEquals("learned_home", learnedRecord.pageGraph?.pages?.single()?.pageId)
+        assertEquals(1, learnedRecord.pageGraph?.transitions?.size)
+        assertEquals("open_learned_page", learnedRecord.pageGraph?.transitions?.single()?.triggerActionId)
+        assertEquals("learned_home", evidence.pageId)
+        assertEquals("{\"page\":\"home\"}", evidence.snapshotJson)
+        assertEquals("/tmp/screenshot.png", evidence.screenshotPath)
+        assertArrayEquals(byteArrayOf(1, 2, 3), evidence.screenshotBytes)
+        assertEquals("launch", transition.triggerNodeId)
+        assertEquals("Launch button", transition.triggerNodeDescription)
+    }
+
+    @Test
+    fun saveLearnedSkill_keepsExistingArtifactsWhenLaterSaveOmitsThem() {
+        store.saveLearnedSkill(
+            manifest = learnedManifest(enabled = true),
+            bindings = listOf(
+                SkillActionBinding(
+                    actionId = "open_learned_page",
+                    intentAction = "android.intent.action.VIEW",
+                ),
+            ),
+            pageGraph = learnedPageGraph(),
+            evidence = learnedEvidence(),
+        )
+
+        store.saveLearnedSkill(
+            manifest = learnedManifest(enabled = false),
+            bindings = listOf(
+                SkillActionBinding(
+                    actionId = "open_learned_page",
+                    intentAction = "android.intent.action.MAIN",
+                ),
+            ),
+        )
+
+        val learnedRecord = store.loadAllSkills().first { it.skillId == "sample.learned" }
+
+        assertEquals(true, learnedRecord.enabled)
+        assertEquals("android.intent.action.MAIN", learnedRecord.bindings.single().intentAction)
+        assertEquals("learned_home", learnedRecord.pageGraph?.pages?.single()?.pageId)
+        assertEquals(1, learnedRecord.evidence.size)
+        assertArrayEquals(byteArrayOf(1, 2, 3), learnedRecord.evidence.single().screenshotBytes)
+    }
+
+    @Test
     fun setSkillEnabled_persistsBuiltinOverrides() {
         store.setSkillEnabled("sample.builtin", enabled = false)
 
@@ -179,6 +248,51 @@ private fun learnedManifest(enabled: Boolean): SkillManifest {
                 exampleUtterances = listOf("open learned page"),
                 matchKeywords = listOf("learned"),
             ),
+        ),
+    )
+}
+
+private fun learnedPageGraph(): PageGraph {
+    return PageGraph(
+        appPackage = "com.example.learned",
+        pages = listOf(
+            PageSpec(
+                pageId = "learned_home",
+                pageName = "Learned Home",
+                appPackage = "com.example.learned",
+                activityName = "LearnedActivity",
+                matchRules = listOf(
+                    PageMatchRule(type = "activity_name", value = "LearnedActivity"),
+                ),
+                availableActions = listOf("open_learned_page"),
+                evidenceFields = mapOf("primary_signal" to "launch button visible"),
+            ),
+        ),
+        transitions = listOf(
+            PageTransition(
+                fromPageId = "learned_home",
+                toPageId = "learned_home",
+                triggerActionId = "open_learned_page",
+                triggerNodeDescription = "Launch button",
+            ),
+        ),
+    )
+}
+
+private fun learnedEvidence(): List<LearningEvidence> {
+    return listOf(
+        LearningEvidence(
+            pageId = "learned_home",
+            snapshotJson = "{\"page\":\"home\"}",
+            screenshotPath = "/tmp/screenshot.png",
+            screenshotBytes = byteArrayOf(1, 2, 3),
+            arrivedBy = ExplorationTransition(
+                fromPageId = "learned_home",
+                toPageId = "learned_home",
+                triggerNodeId = "launch",
+                triggerNodeDescription = "Launch button",
+            ),
+            capturedAt = 1234L,
         ),
     )
 }

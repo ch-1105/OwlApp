@@ -269,9 +269,9 @@ private class FakeSkillStore(
     private val recordsById: MutableMap<String, SkillRecord> = linkedMapOf(),
     private val saveError: Throwable? = null,
 ) : SkillStore {
-    override fun loadAllEnabledActions(): List<RegisteredSkillAction> = emptyList()
+    override suspend fun loadAllEnabledActions(): List<RegisteredSkillAction> = emptyList()
 
-    override fun saveLearnedSkill(
+    override suspend fun saveLearnedSkill(
         manifest: SkillManifest,
         bindings: List<SkillActionBinding>,
         pageGraph: PageGraph?,
@@ -296,7 +296,7 @@ private class FakeSkillStore(
         recordsById[manifest.skillId] = updatedRecord
     }
 
-    override fun updateReviewStatus(skillId: String, status: String) {
+    override suspend fun updateReviewStatus(skillId: String, status: String) {
         val existing = requireNotNull(recordsById[skillId])
         recordsById[skillId] = existing.copy(
             reviewStatus = status,
@@ -304,12 +304,12 @@ private class FakeSkillStore(
         )
     }
 
-    override fun setSkillEnabled(skillId: String, enabled: Boolean) {
+    override suspend fun setSkillEnabled(skillId: String, enabled: Boolean) {
         val existing = requireNotNull(recordsById[skillId])
         recordsById[skillId] = existing.copy(enabled = enabled)
     }
 
-    override fun loadAllSkills(): List<SkillRecord> {
+    override suspend fun loadAllSkills(): List<SkillRecord> {
         return recordsById.values.toList()
     }
 }

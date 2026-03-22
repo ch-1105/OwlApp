@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.phoneclaw.app.contracts.PageGraph
 import com.phoneclaw.app.contracts.SkillManifest
 import com.phoneclaw.app.explorer.PageTreeSnapshot
+import com.phoneclaw.app.learner.ExplorationAgent
+import com.phoneclaw.app.learner.ExplorationProgress
+import com.phoneclaw.app.learner.ExplorationStatus
 import com.phoneclaw.app.learner.LearningEvidence
 import com.phoneclaw.app.learner.LearningSessionManager
 import com.phoneclaw.app.learner.LearningSessionState
@@ -45,6 +48,7 @@ data class ExploreUiState(
     val isLoading: Boolean = false,
     val activeSessionId: String? = null,
     val activeSession: LearningSessionState? = null,
+    val explorationProgress: ExplorationProgress? = null,
     val reviewItems: List<ReviewSkillItem> = emptyList(),
     val draftNameEdits: Map<String, String> = emptyMap(),
     val infoMessage: String? = null,
@@ -55,6 +59,7 @@ class ExploreViewModel(
     private val appScanner: AppScanner,
     private val learningSessionManager: LearningSessionManager,
     private val skillStore: SkillStore,
+    private val explorationAgent: ExplorationAgent? = null,
     private val workDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ExploreUiState())
@@ -100,6 +105,94 @@ class ExploreViewModel(
                 }
             }.onFailure { error ->
                 showError(error.message ?: "开始学习失败。")
+            }
+        }
+    }
+
+    fun startAutonomousExploration(snapshot: PageTreeSnapshot?) {
+        if (snapshot == null) {
+            showError("还没有可用页面快照，先刷新一次当前页面。")
+            return
+        }
+        if (explorationAgent == null) {
+            showError("自主探索功能尚未启用。")
+            return
+        }
+        if (uiState.value.explorationProgress != null) {
+            showError("已有探索任务正在进行中。")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { current ->
+                current.copy(
+                    isLoading = true,
+                    explorationProgress = ExplorationProgress(
+                        pagesDiscovered = 0,
+                        currentPageName = snapshot.packageName,
+                        transitionsRecorded = 0,
+                        stepsUsed = 0,
+                        stepsTotal = 30,
+                        status = ExplorationStatus.LAUNCHING,
+                    ),
+                    infoMessage = null,
+                    errorMessage = null,
+                )
+            }
+
+            runCatching {
+                val appName = withContext(workDispatcher) {
+                    resolveAppName(snapshot.packageName)
+                }
+                withContext(workDispatcher) {
+                    explorationAgent.explore(
+                        appPackage = snapshot.packageName,
+                        appName = appName,
+                        onProgress = { progress ->
+                            _uiState.update { current ->
+                                current.copy(explorationProgress = progress)
+                            }
+                        },
+                    )
+                }
+            }.onSuccess { outcome ->
+                // Save all generated drafts
+                withContext(workDispatcher) {
+                    outcome.drafts.forEach { draft ->
+                        runCatching {
+                            skillStore.saveLearnedSkill(
+                                manifest = draft.manifest,
+                                bindings = draft.bindings,
+                                pageGraph = draft.pageGraph,
+                                evidence = draft.evidence,
+                            )
+                            skillStore.setSkillEnabled(draft.manifest.skillId, enabled = false)
+                            skillStore.updateReviewStatus(draft.manifest.skillId, SKILL_REVIEW_PENDING)
+                        }
+                    }
+                }
+                val reviewItems = withContext(workDispatcher) { loadReviewItems() }
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        explorationProgress = null,
+                        reviewItems = reviewItems,
+                        draftNameEdits = mergeDraftNameEdits(reviewItems),
+                        infoMessage = "自主探索完成！发现 ${outcome.pagesDiscovered} 个页面，" +
+                            "记录 ${outcome.transitionsRecorded} 条跳转，" +
+                            "生成 ${outcome.drafts.size} 个 Skill 草稿。",
+                        errorMessage = null,
+                    )
+                }
+            }.onFailure { error ->
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        explorationProgress = null,
+                        errorMessage = error.message ?: "自主探索失败。",
+                        infoMessage = null,
+                    )
+                }
             }
         }
     }
@@ -425,6 +518,7 @@ class ExploreViewModelFactory(
     private val appScanner: AppScanner,
     private val learningSessionManager: LearningSessionManager,
     private val skillStore: SkillStore,
+    private val explorationAgent: ExplorationAgent? = null,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ExploreViewModel::class.java)) {
@@ -433,6 +527,7 @@ class ExploreViewModelFactory(
                 appScanner = appScanner,
                 learningSessionManager = learningSessionManager,
                 skillStore = skillStore,
+                explorationAgent = explorationAgent,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

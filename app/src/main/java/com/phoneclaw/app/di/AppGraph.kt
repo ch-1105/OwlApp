@@ -1,6 +1,7 @@
 package com.phoneclaw.app.di
 
 import android.content.Context
+import android.content.Intent
 import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
 import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
@@ -24,7 +25,10 @@ import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
 import com.phoneclaw.app.learner.AiPageAnalyzer
 import com.phoneclaw.app.learner.AiSkillLearner
+import com.phoneclaw.app.learner.AppLauncher
+import com.phoneclaw.app.learner.DefaultExplorationAgent
 import com.phoneclaw.app.learner.DefaultLearningSessionManager
+import com.phoneclaw.app.learner.ExplorationAgent
 import com.phoneclaw.app.learner.LearningSessionManager
 import com.phoneclaw.app.learner.SkillLearner
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
@@ -107,6 +111,17 @@ class AppGraph(
     val authorizationManager: AuthorizationManager = RoomAuthorizationManager(database.authorizedAppDao())
     val appExplorer: AppExplorer = AccessibilityAppExplorer()
     val learningSessionManager: LearningSessionManager = DefaultLearningSessionManager(
+        appExplorer = appExplorer,
+        pageAnalysisPort = pageAnalysisPort,
+        skillLearner = skillLearner,
+    )
+    val appLauncher: AppLauncher = AppLauncher { packageName ->
+        val intent = appContext.packageManager.getLaunchIntentForPackage(packageName) ?: return@AppLauncher false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { appContext.startActivity(intent) }.isSuccess
+    }
+    val explorationAgent: ExplorationAgent = DefaultExplorationAgent(
+        appLauncher = appLauncher,
         appExplorer = appExplorer,
         pageAnalysisPort = pageAnalysisPort,
         skillLearner = skillLearner,

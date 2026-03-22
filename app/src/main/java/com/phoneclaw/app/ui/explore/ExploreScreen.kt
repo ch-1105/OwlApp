@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import com.phoneclaw.app.explorer.AccessibilityNodeSnapshot
 import com.phoneclaw.app.explorer.PageTreeSnapshot
 import com.phoneclaw.app.explorer.totalNodeCount
+import com.phoneclaw.app.learner.ExplorationProgress
+import com.phoneclaw.app.learner.ExplorationStatus
 import com.phoneclaw.app.learner.LearningSessionState
 import com.phoneclaw.app.learner.LearningStatus
 import com.phoneclaw.app.store.SKILL_REVIEW_APPROVED
@@ -39,6 +41,7 @@ fun ExploreScreen(
     uiState: ExploreUiState,
     onRefreshSnapshot: () -> Unit,
     onStartLearning: (PageTreeSnapshot?) -> Unit,
+    onStartAutonomousExploration: (PageTreeSnapshot?) -> Unit,
     onCaptureCurrentPage: () -> Unit,
     onTapAndCapture: (String, String) -> Unit,
     onFinishExploration: () -> Unit,
@@ -50,6 +53,7 @@ fun ExploreScreen(
     val context = LocalContext.current
     val clickableNodes = learningNodeSourceSnapshot(uiState).toClickableNodes()
     val hasActiveSession = uiState.activeSessionId != null
+    val isExploring = uiState.explorationProgress != null
     val canOperateSession = hasActiveSession && !uiState.isLoading
 
     LazyColumn(
@@ -95,9 +99,17 @@ fun ExploreScreen(
             SnapshotCard(
                 latestSnapshot = latestSnapshot,
                 onStartLearning = { onStartLearning(latestSnapshot) },
-                startEnabled = latestSnapshot != null && !uiState.isLoading && !hasActiveSession,
+                onStartAutonomousExploration = { onStartAutonomousExploration(latestSnapshot) },
+                startEnabled = latestSnapshot != null && !uiState.isLoading && !hasActiveSession && !isExploring,
                 isLearning = hasActiveSession,
+                isExploring = isExploring,
             )
+        }
+
+        uiState.explorationProgress?.let { progress ->
+            item {
+                ExplorationProgressCard(progress = progress)
+            }
         }
 
         item {
@@ -226,8 +238,10 @@ private fun MessageCard(
 private fun SnapshotCard(
     latestSnapshot: PageTreeSnapshot?,
     onStartLearning: () -> Unit,
+    onStartAutonomousExploration: () -> Unit,
     startEnabled: Boolean,
     isLearning: Boolean,
+    isExploring: Boolean,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -255,11 +269,21 @@ private fun SnapshotCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Button(
+                onClick = onStartAutonomousExploration,
+                enabled = startEnabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (isExploring) "正在自主探索..." else "自主学习当前应用",
+                )
+            }
+
+            Button(
                 onClick = onStartLearning,
                 enabled = startEnabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (isLearning) "学习已开始" else "开始学习当前应用")
+                Text(if (isLearning) "手动学习已开始" else "手动学习当前应用")
             }
         }
     }
@@ -360,6 +384,39 @@ private fun LearningSessionCard(
                     Text(node.label)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ExplorationProgressCard(progress: ExplorationProgress) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "自主探索进度",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = when (progress.status) {
+                    ExplorationStatus.LAUNCHING -> "正在启动应用..."
+                    ExplorationStatus.EXPLORING -> "正在探索：${progress.currentPageName}"
+                    ExplorationStatus.GENERATING -> "正在生成 Skill 草稿..."
+                    ExplorationStatus.COMPLETED -> "探索完成"
+                    ExplorationStatus.FAILED -> "探索失败"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = when (progress.status) {
+                    ExplorationStatus.FAILED -> MaterialTheme.colorScheme.error
+                    ExplorationStatus.COMPLETED -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.primary
+                },
+            )
+            Text("已发现页面：${progress.pagesDiscovered}")
+            Text("已记录跳转：${progress.transitionsRecorded}")
+            Text("操作步数：${progress.stepsUsed} / ${progress.stepsTotal}")
         }
     }
 }

@@ -72,6 +72,7 @@ fun PhoneClawApp(
                 appScanner = appGraph.appScanner,
                 learningSessionManager = appGraph.learningSessionManager,
                 skillStore = appGraph.skillStore,
+                explorationAgent = appGraph.explorationAgent,
             ),
         )
         val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
@@ -132,6 +133,7 @@ fun PhoneClawApp(
                         AccessibilityCaptureBridge.captureCurrentPageTree()
                     },
                     onStartLearning = exploreViewModel::startLearning,
+                    onStartAutonomousExploration = exploreViewModel::startAutonomousExploration,
                     onCaptureCurrentPage = exploreViewModel::captureCurrentPage,
                     onTapAndCapture = exploreViewModel::tapAndCapture,
                     onFinishExploration = exploreViewModel::finishExploration,

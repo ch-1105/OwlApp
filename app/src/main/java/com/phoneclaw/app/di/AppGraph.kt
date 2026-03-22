@@ -23,12 +23,15 @@ import com.phoneclaw.app.gateway.ports.SessionPort
 import com.phoneclaw.app.gateway.ports.SkillRegistryPort
 import com.phoneclaw.app.gateway.ports.SummaryPort
 import com.phoneclaw.app.gateway.ports.TelemetryPort
+import com.phoneclaw.app.learner.AiExplorationStrategy
 import com.phoneclaw.app.learner.AiPageAnalyzer
 import com.phoneclaw.app.learner.AiSkillLearner
 import com.phoneclaw.app.learner.AppLauncher
 import com.phoneclaw.app.learner.DefaultExplorationAgent
 import com.phoneclaw.app.learner.DefaultLearningSessionManager
 import com.phoneclaw.app.learner.ExplorationAgent
+import com.phoneclaw.app.learner.ExplorationStrategy
+import com.phoneclaw.app.learner.HeuristicExplorationStrategy
 import com.phoneclaw.app.learner.LearningSessionManager
 import com.phoneclaw.app.learner.SkillLearner
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
@@ -120,11 +123,17 @@ class AppGraph(
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { appContext.startActivity(intent) }.isSuccess
     }
+    val explorationStrategy: ExplorationStrategy = AiExplorationStrategy(
+        modelPort = modelPort,
+        allowCloud = cloudConfig.remoteEnabled,
+        preferredProvider = cloudConfig.provider,
+    )
     val explorationAgent: ExplorationAgent = DefaultExplorationAgent(
         appLauncher = appLauncher,
         appExplorer = appExplorer,
         pageAnalysisPort = pageAnalysisPort,
         skillLearner = skillLearner,
+        strategy = explorationStrategy,
     )
     val telemetryPort: TelemetryPort = LogcatTelemetry()
     val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))

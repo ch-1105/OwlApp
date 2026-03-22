@@ -19,6 +19,7 @@ class DefaultExplorationAgent(
     private val appExplorer: AppExplorer,
     private val pageAnalysisPort: PageAnalysisPort,
     private val skillLearner: SkillLearner,
+    private val strategy: ExplorationStrategy = HeuristicExplorationStrategy(),
 ) : ExplorationAgent {
 
     override suspend fun explore(
@@ -35,6 +36,7 @@ class DefaultExplorationAgent(
         delay(LAUNCH_WAIT_MS)
 
         val visited = mutableSetOf<String>()
+        val visitedNames = mutableListOf<String>()
         val pages = mutableListOf<DiscoveredPage>()
         val transitions = mutableListOf<ExplorationTransition>()
         val stack = ArrayDeque<ExplorationFrame>()
@@ -51,8 +53,9 @@ class DefaultExplorationAgent(
         // Capture initial page
         val initial = captureAndAnalyze(appPackage) ?: return emptyOutcome(appPackage, appName)
         visited += initial.pageId
+        visitedNames += initial.pageName
         pages += initial
-        pushCandidates(stack, initial)
+        pushCandidates(stack, initial, visited, visitedNames, transitions, budget, stepsUsed)
 
         onProgress(progressOf(1, initial.pageName, 0, stepsUsed, budget, ExplorationStatus.EXPLORING))
 
@@ -109,6 +112,7 @@ class DefaultExplorationAgent(
 
             // New page discovered
             visited += result.pageId
+            visitedNames += result.pageName
             pages += result
 
             onProgress(progressOf(
@@ -125,7 +129,7 @@ class DefaultExplorationAgent(
             }
 
             // Push candidates for the new page
-            pushCandidates(stack, result)
+            pushCandidates(stack, result, visited, visitedNames, transitions, budget, stepsUsed)
             if (stack.last().untried.isEmpty()) {
                 // Nothing clickable here, go back
                 stack.removeLast()
@@ -178,12 +182,36 @@ class DefaultExplorationAgent(
         )
     }
 
-    private fun pushCandidates(stack: ArrayDeque<ExplorationFrame>, page: DiscoveredPage) {
-        val candidates = safeCandidates(page.pageTree)
-        if (candidates.isNotEmpty()) {
+    private suspend fun pushCandidates(
+        stack: ArrayDeque<ExplorationFrame>,
+        page: DiscoveredPage,
+        visitedIds: Set<String>,
+        visitedNames: List<String>,
+        transitions: List<ExplorationTransition>,
+        budget: ExplorationBudget,
+        stepsUsed: Int,
+    ) {
+        val raw = buildSafeCandidates(page.pageTree)
+        if (raw.isEmpty()) return
+
+        val context = ExplorationContext(
+            currentPage = page.pageTree,
+            currentAnalysis = page.analysis,
+            visitedPageIds = visitedIds,
+            visitedPageNames = visitedNames,
+            transitionsRecorded = transitions.size,
+            stepsRemaining = budget.maxSteps - stepsUsed,
+            depthRemaining = budget.maxDepth - stack.size,
+        )
+
+        val ordered = runCatching {
+            strategy.selectCandidates(context, raw)
+        }.getOrDefault(raw)
+
+        if (ordered.isNotEmpty()) {
             stack.addLast(ExplorationFrame(
                 pageId = page.pageId,
-                untried = candidates.toMutableList(),
+                untried = ordered.toMutableList(),
             ))
         }
     }
@@ -217,10 +245,9 @@ class DefaultExplorationAgent(
     }
 }
 
-private fun safeCandidates(pageTree: PageTreeSnapshot): List<ClickCandidate> {
+private fun buildSafeCandidates(pageTree: PageTreeSnapshot): List<ClickCandidate> {
     return pageTree.flattenNodes()
         .filter { ExplorationSafetyFilter.isSafeToClick(it) }
-        .sortedWith(candidatePriority())
         .take(MAX_CANDIDATES_PER_PAGE)
         .map { node ->
             ClickCandidate(
@@ -228,19 +255,6 @@ private fun safeCandidates(pageTree: PageTreeSnapshot): List<ClickCandidate> {
                 description = node.bestDescription(),
             )
         }
-}
-
-private fun candidatePriority(): Comparator<AccessibilityNodeSnapshot> {
-    return compareByDescending { node ->
-        val resourceId = node.resourceId?.lowercase().orEmpty()
-        when {
-            resourceId.contains("tab") || resourceId.contains("navigation") -> 4
-            resourceId.contains("menu") || resourceId.contains("list_item") -> 3
-            node.text != null && node.contentDescription != null -> 2
-            node.text != null || node.contentDescription != null -> 1
-            else -> 0
-        }
-    }
 }
 
 private fun AccessibilityNodeSnapshot.bestDescription(): String {
@@ -291,9 +305,4 @@ private data class DiscoveredPage(
 private data class ExplorationFrame(
     val pageId: String,
     val untried: MutableList<ClickCandidate>,
-)
-
-private data class ClickCandidate(
-    val nodeId: String,
-    val description: String,
 )

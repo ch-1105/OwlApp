@@ -11,6 +11,7 @@ import com.phoneclaw.app.contracts.SkillActionManifest
 import com.phoneclaw.app.contracts.SkillManifest
 import com.phoneclaw.app.explorer.AccessibilityNodeSnapshot
 import com.phoneclaw.app.explorer.PageTreeSnapshot
+import com.phoneclaw.app.explorer.flattenNodes
 import com.phoneclaw.app.explorer.totalNodeCount
 import com.phoneclaw.app.gateway.ports.ClickableElementSuggestion
 import com.phoneclaw.app.gateway.ports.ModelPort
@@ -19,16 +20,8 @@ import com.phoneclaw.app.skills.SkillActionBinding
 import com.phoneclaw.app.skills.validateSkillPackage
 import java.util.UUID
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import org.json.JSONArray
-import org.json.JSONObject
 
 private const val TASK_TYPE_SKILL_GENERATION = "skill_generation"
 private const val MAX_MODEL_NODES_PER_PAGE = 24
@@ -267,7 +260,7 @@ private fun buildGeneratedActions(
     appName: String,
     pageName: String,
     pageId: String,
-    clickableElements: List<com.phoneclaw.app.gateway.ports.ClickableElementSuggestion>,
+    clickableElements: List<ClickableElementSuggestion>,
     fallbackActionIds: List<String>,
     usedActionIds: MutableSet<String>,
 ): List<SkillActionManifest> {
@@ -293,13 +286,13 @@ private fun buildGeneratedActions(
     }
 }
 
-private fun com.phoneclaw.app.gateway.ports.ClickableElementSuggestion.toActionManifest(
+private fun ClickableElementSuggestion.toActionManifest(
     appName: String,
     pageName: String,
     pageId: String,
     usedActionIds: MutableSet<String>,
 ): SkillActionManifest {
-    val actionId = usedActionIds.makeUnique(suggestedActionName.toActionId())
+    val actionId = usedActionIds.makeUnique(suggestedActionName.toActionSlug(maxLength = Int.MAX_VALUE))
     val displayName = suggestedDescription.ifBlank { actionId.toDisplayName() }
     val description = "On $pageName in $appName, $suggestedDescription."
     val keywords = buildKeywords(
@@ -332,7 +325,7 @@ private fun createFallbackActionManifest(
     pageId: String,
     usedActionIds: MutableSet<String>,
 ): SkillActionManifest {
-    val actionId = usedActionIds.makeUnique(rawActionId.toActionId())
+    val actionId = usedActionIds.makeUnique(rawActionId.toActionSlug(maxLength = Int.MAX_VALUE))
     val displayName = actionId.toDisplayName()
 
     return SkillActionManifest(
@@ -625,7 +618,7 @@ private fun JsonObject.toSkillActionManifestOrNull(
     val displayName = stringOrNull("display_name") ?: actionId.toDisplayName()
 
     return SkillActionManifest(
-        actionId = actionId.toActionId(),
+        actionId = actionId.toActionSlug(maxLength = Int.MAX_VALUE),
         displayName = displayName,
         description = stringOrNull("description") ?: "Perform $displayName in $appName.",
         executorType = stringOrNull("executor_type") ?: "accessibility",
@@ -690,91 +683,6 @@ private fun JsonObject.toSkillActionBindingOrNull(): SkillActionBinding? {
     )
 }
 
-private fun PageTreeSnapshot.toSnapshotJson(): String {
-    return buildString {
-        append('{')
-        append("\"package_name\":")
-        append(packageName.toJsonString())
-        append(',')
-        append("\"activity_name\":")
-        append(activityName.toJsonString())
-        append(',')
-        append("\"timestamp\":")
-        append(timestamp)
-        append(',')
-        append("\"nodes\":[")
-        nodes.forEachIndexed { index, node ->
-            if (index > 0) {
-                append(',')
-            }
-            append(node.toJsonText())
-        }
-        append("]}")
-    }
-}
-
-private fun AccessibilityNodeSnapshot.toJsonText(): String {
-    return buildString {
-        append('{')
-        append("\"node_id\":")
-        append(nodeId.toJsonString())
-        append(',')
-        append("\"class_name\":")
-        append(className.toJsonString())
-        append(',')
-        append("\"text\":")
-        append(text.toJsonString())
-        append(',')
-        append("\"content_description\":")
-        append(contentDescription.toJsonString())
-        append(',')
-        append("\"resource_id\":")
-        append(resourceId.toJsonString())
-        append(',')
-        append("\"is_clickable\":")
-        append(isClickable)
-        append(',')
-        append("\"is_scrollable\":")
-        append(isScrollable)
-        append(',')
-        append("\"is_editable\":")
-        append(isEditable)
-        append(',')
-        append("\"bounds\":")
-        append(bounds.toJsonString())
-        append(',')
-        append("\"children\":[")
-        children.forEachIndexed { index, child ->
-            if (index > 0) {
-                append(',')
-            }
-            append(child.toJsonText())
-        }
-        append("]}")
-    }
-}
-
-private fun String?.toJsonString(): String {
-    if (this == null) {
-        return "null"
-    }
-
-    val escaped = buildString {
-        this@toJsonString.forEach { char ->
-            when (char) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(char)
-            }
-        }
-    }
-
-    return "\"$escaped\""
-}
-
 private fun buildSkillId(appPackage: String): String {
     return "learned.${appPackage.replace('-', '_')}"
 }
@@ -787,13 +695,13 @@ private fun buildDisplayName(appName: String, appPackage: String): String {
     return "${appPackage.substringAfterLast('.').toDisplayName()} Learned Skill"
 }
 
-private fun buildKeywords(vararg values: String?): List<String> {
-    val keywordPattern = Regex("[A-Za-z0-9]+|\\p{IsHan}+")
+private val KEYWORD_PATTERN = Regex("[A-Za-z0-9]+|\\p{IsHan}+")
 
+private fun buildKeywords(vararg values: String?): List<String> {
     return values.asList()
         .filterNotNull()
         .flatMap { value ->
-            keywordPattern.findAll(value.lowercase())
+            KEYWORD_PATTERN.findAll(value.lowercase())
                 .map { it.value }
                 .toList()
         }
@@ -802,77 +710,12 @@ private fun buildKeywords(vararg values: String?): List<String> {
         .take(10)
 }
 
-private fun String.toActionId(): String {
-    val normalized = lowercase()
-        .replace(Regex("[^a-z0-9]+"), "_")
-        .trim('_')
-
-    if (normalized.isNotBlank()) {
-        return normalized
-    }
-
-    return "generated_action"
-}
-
-private fun String.toDisplayName(): String {
-    val normalized = replace('_', ' ')
-        .replace('-', ' ')
-        .trim()
-    if (normalized.isBlank()) {
-        return "Generated Action"
-    }
-
-    return normalized.split(Regex("\\s+"))
-        .joinToString(" ") { word ->
-            word.replaceFirstChar { char ->
-                if (char.isLowerCase()) {
-                    char.titlecase()
-                } else {
-                    char.toString()
-                }
-            }
-        }
-}
-
-private fun MutableSet<String>.makeUnique(baseName: String): String {
-    if (add(baseName)) {
-        return baseName
-    }
-
-    var suffix = 2
-    while (true) {
-        val candidate = "${baseName}_$suffix"
-        if (add(candidate)) {
-            return candidate
-        }
-        suffix += 1
-    }
-}
-
-private fun PageTreeSnapshot.flattenNodes(): List<AccessibilityNodeSnapshot> {
-    val result = mutableListOf<AccessibilityNodeSnapshot>()
-    nodes.forEach { node ->
-        collectNodes(node, result)
-    }
-    return result
-}
-
-private fun collectNodes(
-    node: AccessibilityNodeSnapshot,
-    result: MutableList<AccessibilityNodeSnapshot>,
-) {
-    result += node
-    node.children.forEach { child ->
-        collectNodes(child, result)
-    }
-}
-
 private fun AccessibilityNodeSnapshot.toPromptLine(): String {
     val parts = buildList {
         add("id=$nodeId")
-        className?.takeIf { it.isNotBlank() }?.let { add("class=${it.substringAfterLast('.')}" ) }
-        text?.takeIf { it.isNotBlank() }?.let { add("text=${it.cleanText()}" ) }
-        contentDescription?.takeIf { it.isNotBlank() }?.let { add("desc=${it.cleanText()}" ) }
+        className?.takeIf { it.isNotBlank() }?.let { add("class=${it.substringAfterLast('.')}") }
+        text?.takeIf { it.isNotBlank() }?.let { add("text=${it.cleanText()}") }
+        contentDescription?.takeIf { it.isNotBlank() }?.let { add("desc=${it.cleanText()}") }
         resourceId?.takeIf { it.isNotBlank() }?.let { add("resource=$it") }
         add("clickable=$isClickable")
         add("scrollable=$isScrollable")
@@ -880,60 +723,6 @@ private fun AccessibilityNodeSnapshot.toPromptLine(): String {
     }
 
     return parts.joinToString(" | ")
-}
-
-private fun String.cleanText(): String {
-    return trim()
-        .replace(Regex("\\s+"), " ")
-        .take(80)
-}
-
-private fun JsonObject.stringOrNull(key: String): String? {
-    return runCatching {
-        this[key]?.jsonPrimitive?.contentOrNull?.trim()
-    }.getOrNull()?.takeIf { it.isNotBlank() }
-}
-
-private fun JsonObject.booleanOrNull(key: String): Boolean? {
-    return runCatching {
-        this[key]?.jsonPrimitive?.booleanOrNull
-    }.getOrNull()
-}
-
-private fun JsonObject.riskLevelOrNull(key: String): RiskLevel? {
-    val rawValue = stringOrNull(key) ?: return null
-    return RiskLevel.entries.firstOrNull { it.name == rawValue.uppercase() }
-}
-
-private fun JsonObject.stringList(key: String): List<String> {
-    return arrayOrEmpty(key)
-        .mapNotNull { element ->
-            runCatching { element.jsonPrimitive.contentOrNull?.trim() }.getOrNull()
-        }
-        .filter { it.isNotBlank() }
-}
-
-private fun JsonObject.arrayOrEmpty(key: String): List<JsonElement> {
-    return runCatching {
-        this[key]?.jsonArray?.toList()
-    }.getOrNull().orEmpty()
-}
-
-private fun JsonObject.objectOrNull(key: String): JsonObject? {
-    return this[key].asObjectOrNull()
-}
-
-private fun JsonElement?.asObjectOrNull(): JsonObject? {
-    return runCatching { this?.jsonObject }.getOrNull()
-}
-
-private fun JsonObject.toStringMap(): Map<String, String> {
-    return entries.mapNotNull { (key, value) ->
-        val text = runCatching {
-            (value as? JsonPrimitive)?.contentOrNull?.trim()
-        }.getOrNull() ?: return@mapNotNull null
-        key to text
-    }.toMap()
 }
 
 private data class GeneratedPage(
@@ -946,4 +735,3 @@ private data class ObservedTransitionKey(
     val toPageId: String,
     val triggerNodeDescription: String,
 )
-

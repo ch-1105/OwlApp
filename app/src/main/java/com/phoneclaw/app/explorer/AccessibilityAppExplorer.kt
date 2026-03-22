@@ -2,12 +2,14 @@ package com.phoneclaw.app.explorer
 
 import kotlinx.coroutines.delay
 
-private const val DEFAULT_CAPTURE_WAIT_MS = 150L
-private const val DEFAULT_CAPTURE_ATTEMPTS = 8
+private const val DEFAULT_INITIAL_WAIT_MS = 100L
+private const val DEFAULT_MAX_WAIT_MS = 1600L
+private const val DEFAULT_CAPTURE_ATTEMPTS = 10
 
 class AccessibilityAppExplorer(
     private val bridge: AccessibilityExplorerBridge = AccessibilityCaptureBridge,
-    private val captureWaitMs: Long = DEFAULT_CAPTURE_WAIT_MS,
+    private val initialWaitMs: Long = DEFAULT_INITIAL_WAIT_MS,
+    private val maxWaitMs: Long = DEFAULT_MAX_WAIT_MS,
     private val captureAttempts: Int = DEFAULT_CAPTURE_ATTEMPTS,
 ) : AppExplorer {
     override suspend fun captureCurrentPage(): ExplorationResult? {
@@ -32,12 +34,14 @@ class AccessibilityAppExplorer(
     }
 
     private suspend fun awaitUpdatedSnapshot(previousTimestamp: Long?): ExplorationResult? {
+        var waitMs = initialWaitMs
         repeat(captureAttempts) {
+            delay(waitMs)
             val snapshot = bridge.captureCurrentPageTree() ?: bridge.latestSnapshot.value
             if (snapshot != null && snapshot.timestamp != previousTimestamp) {
                 return snapshot.toExplorationResult()
             }
-            delay(captureWaitMs)
+            waitMs = (waitMs * 2).coerceAtMost(maxWaitMs)
         }
         return bridge.latestSnapshot.value?.toExplorationResult()
     }

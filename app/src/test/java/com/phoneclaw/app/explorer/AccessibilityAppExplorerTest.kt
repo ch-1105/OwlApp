@@ -14,7 +14,7 @@ class AccessibilityAppExplorerTest {
         val snapshot = testSnapshot(timestamp = 10L)
         val explorer = AccessibilityAppExplorer(
             bridge = FakeAccessibilityExplorerBridge(capturedSnapshot = snapshot),
-            captureWaitMs = 0L,
+            initialWaitMs = 0L,
         )
 
         val result = explorer.captureCurrentPage()
@@ -36,7 +36,7 @@ class AccessibilityAppExplorerTest {
         )
         val explorer = AccessibilityAppExplorer(
             bridge = bridge,
-            captureWaitMs = 0L,
+            initialWaitMs = 0L,
         )
 
         val result = explorer.performClick("0/0")
@@ -53,7 +53,7 @@ class AccessibilityAppExplorerTest {
                 capturedSnapshot = testSnapshot(timestamp = 10L),
                 backResult = false,
             ),
-            captureWaitMs = 0L,
+            initialWaitMs = 0L,
         )
 
         val result = explorer.performBack()

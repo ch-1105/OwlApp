@@ -13,12 +13,8 @@ import com.phoneclaw.app.gateway.ports.PageAnalysisResult
 import com.phoneclaw.app.model.StructuredJsonContentParser
 import java.util.UUID
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 private const val TASK_TYPE_PAGE_ANALYSIS = "page_analysis"
 private const val MAX_SERIALIZED_NODES = 60
@@ -232,13 +228,13 @@ private fun PageTreeSnapshot.buildClickableSuggestions(): List<ClickableElementS
 
 private fun PageTreeSnapshot.bestPageId(): String {
     val activitySegment = activityName?.substringAfterLast('.')?.toActionSlug()
-    if (!activitySegment.isNullOrBlank()) {
+    if (!activitySegment.isNullOrBlank() && activitySegment != "generated_action") {
         return activitySegment
     }
 
     val resourceSegment = flattenNodes()
         .mapNotNull { item -> item.node.resourceId?.substringAfterLast('/')?.toActionSlug() }
-        .firstOrNull { it.isNotBlank() }
+        .firstOrNull { it.isNotBlank() && it != "generated_action" }
     if (!resourceSegment.isNullOrBlank()) {
         return resourceSegment
     }
@@ -292,11 +288,11 @@ private fun AccessibilityNodeSnapshot.toClickableSuggestion(
 ): ClickableElementSuggestion {
     val label = bestLabel()
     val baseName = label?.toActionSlug()
-        ?.takeIf { it.isNotBlank() }
+        ?.takeIf { it.isNotBlank() && it != "generated_action" }
         ?.let { "tap_$it" }
         ?: resourceId?.substringAfterLast('/')
             ?.toActionSlug()
-            ?.takeIf { it.isNotBlank() }
+            ?.takeIf { it.isNotBlank() && it != "generated_action" }
             ?.let { "tap_$it" }
         ?: "tap_item_${index + 1}"
     val suggestedActionName = usedNames.makeUnique(baseName)
@@ -352,7 +348,7 @@ private fun FlattenedNode.toPromptLine(): String {
     val indent = "  ".repeat(depth)
     val parts = buildList {
         add("id=${node.nodeId}")
-        node.className?.takeIf { it.isNotBlank() }?.let { add("class=${it.substringAfterLast('.')}" ) }
+        node.className?.takeIf { it.isNotBlank() }?.let { add("class=${it.substringAfterLast('.')}") }
         node.text?.cleanText()?.takeIf { it.isNotBlank() }?.let { add("text=$it") }
         node.contentDescription?.cleanText()?.takeIf { it.isNotBlank() }?.let { add("desc=$it") }
         node.resourceId?.takeIf { it.isNotBlank() }?.let { add("resource=$it") }
@@ -363,73 +359,7 @@ private fun FlattenedNode.toPromptLine(): String {
     return indent + parts.joinToString(" | ")
 }
 
-private fun MutableSet<String>.makeUnique(baseName: String): String {
-    if (add(baseName)) {
-        return baseName
-    }
-
-    var suffix = 2
-    while (true) {
-        val candidate = "${baseName}_$suffix"
-        if (add(candidate)) {
-            return candidate
-        }
-        suffix += 1
-    }
-}
-
-private fun String.toActionSlug(): String {
-    val cleaned = lowercase()
-        .replace(Regex("[^a-z0-9]+"), "_")
-        .trim('_')
-
-    return cleaned.take(40)
-}
-
-private fun String.cleanText(): String {
-    return trim()
-        .replace(Regex("\\s+"), " ")
-        .take(80)
-}
-
-private fun JsonObject.stringOrNull(key: String): String? {
-    return runCatching {
-        this[key]?.jsonPrimitive?.contentOrNull?.cleanText()
-    }.getOrNull()?.takeIf { it.isNotBlank() }
-}
-
-private fun JsonObject.stringList(key: String): List<String> {
-    return arrayOrEmpty(key)
-        .mapNotNull { element ->
-            runCatching { element.jsonPrimitive.contentOrNull?.cleanText() }.getOrNull()
-        }
-        .filter { it.isNotBlank() }
-}
-
-private fun JsonObject.arrayOrEmpty(key: String): List<JsonElement> {
-    return runCatching {
-        this[key]?.jsonArray?.toList()
-    }.getOrNull().orEmpty()
-}
-
-private fun JsonObject.objectOrNull(key: String): JsonObject? {
-    return this[key].asObjectOrNull()
-}
-
-private fun JsonElement?.asObjectOrNull(): JsonObject? {
-    return runCatching { this?.jsonObject }.getOrNull()
-}
-
-private fun JsonObject.toStringMap(): Map<String, String> {
-    return entries.mapNotNull { (key, value) ->
-        val text = runCatching { value.jsonPrimitive.contentOrNull?.cleanText() }.getOrNull()
-            ?: return@mapNotNull null
-        key to text
-    }.toMap()
-}
-
 private data class FlattenedNode(
     val node: AccessibilityNodeSnapshot,
     val depth: Int,
 )
-

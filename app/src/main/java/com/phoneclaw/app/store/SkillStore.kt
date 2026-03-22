@@ -32,18 +32,18 @@ data class SkillRecord(
 }
 
 interface SkillStore {
-    fun loadAllEnabledActions(): List<RegisteredSkillAction>
+    suspend fun loadAllEnabledActions(): List<RegisteredSkillAction>
 
-    fun saveLearnedSkill(
+    suspend fun saveLearnedSkill(
         manifest: SkillManifest,
         bindings: List<SkillActionBinding>,
         pageGraph: PageGraph? = null,
         evidence: List<LearningEvidence> = emptyList(),
     )
 
-    fun updateReviewStatus(skillId: String, status: String)
+    suspend fun updateReviewStatus(skillId: String, status: String)
 
-    fun setSkillEnabled(skillId: String, enabled: Boolean)
+    suspend fun setSkillEnabled(skillId: String, enabled: Boolean)
 
-    fun loadAllSkills(): List<SkillRecord>
+    suspend fun loadAllSkills(): List<SkillRecord>
 }

@@ -18,14 +18,13 @@ import com.phoneclaw.app.skills.parsePageGraphJson
 import com.phoneclaw.app.skills.parseSkillBindingsJson
 import com.phoneclaw.app.skills.parseSkillManifestJson
 import com.phoneclaw.app.skills.validateSkillPackage
-import kotlinx.coroutines.runBlocking
 
 class RoomSkillStore(
     private val skillDao: SkillDao,
     private val builtinLoader: JsonSkillLoader,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : SkillStore {
-    override fun loadAllEnabledActions(): List<RegisteredSkillAction> {
+    override suspend fun loadAllEnabledActions(): List<RegisteredSkillAction> {
         return loadAllSkills()
             .filter { record ->
                 record.enabled && record.reviewStatus == SKILL_REVIEW_APPROVED
@@ -35,14 +34,14 @@ class RoomSkillStore(
             }
     }
 
-    override fun saveLearnedSkill(
+    override suspend fun saveLearnedSkill(
         manifest: SkillManifest,
         bindings: List<SkillActionBinding>,
         pageGraph: PageGraph?,
         evidence: List<LearningEvidence>,
     ) {
         val now = clock()
-        val existing = runBlocking { skillDao.getById(manifest.skillId) }
+        val existing = skillDao.getById(manifest.skillId)
         val createdAt = existing?.createdAt ?: now
         val learnedAt = existing?.learnedAt ?: now
         val enabled = existing?.enabled ?: manifest.enabled
@@ -61,27 +60,25 @@ class RoomSkillStore(
             evidence = persistedEvidence,
         )
 
-        runBlocking {
-            skillDao.insert(
-                SkillEntity(
-                    skillId = manifest.skillId,
-                    manifestJson = encodeSkillManifestJson(skillPackage.manifest),
-                    bindingsJson = encodeSkillBindingsJson(skillPackage.bindings),
-                    pageGraphJson = skillPackage.pageGraph?.let(::encodePageGraphJson),
-                    evidenceJson = encodeLearningEvidenceJson(skillPackage.evidence),
-                    source = SKILL_SOURCE_LEARNED,
-                    enabled = enabled,
-                    reviewStatus = reviewStatus,
-                    learnedAt = learnedAt,
-                    appVersion = existing?.appVersion,
-                    createdAt = createdAt,
-                    updatedAt = now,
-                ),
-            )
-        }
+        skillDao.insert(
+            SkillEntity(
+                skillId = manifest.skillId,
+                manifestJson = encodeSkillManifestJson(skillPackage.manifest),
+                bindingsJson = encodeSkillBindingsJson(skillPackage.bindings),
+                pageGraphJson = skillPackage.pageGraph?.let(::encodePageGraphJson),
+                evidenceJson = encodeLearningEvidenceJson(skillPackage.evidence),
+                source = SKILL_SOURCE_LEARNED,
+                enabled = enabled,
+                reviewStatus = reviewStatus,
+                learnedAt = learnedAt,
+                appVersion = existing?.appVersion,
+                createdAt = createdAt,
+                updatedAt = now,
+            ),
+        )
     }
 
-    override fun updateReviewStatus(skillId: String, status: String) {
+    override suspend fun updateReviewStatus(skillId: String, status: String) {
         require(status in setOf(SKILL_REVIEW_APPROVED, SKILL_REVIEW_PENDING, SKILL_REVIEW_REJECTED)) {
             "Unsupported review status: $status"
         }
@@ -93,7 +90,7 @@ class RoomSkillStore(
         persistRecord(existing.copy(reviewStatus = status, updatedAt = clock()))
     }
 
-    override fun setSkillEnabled(skillId: String, enabled: Boolean) {
+    override suspend fun setSkillEnabled(skillId: String, enabled: Boolean) {
         val existing = requireNotNull(findSkillRecord(skillId)) {
             "Skill $skillId was not found."
         }
@@ -101,7 +98,7 @@ class RoomSkillStore(
         persistRecord(existing.copy(enabled = enabled, updatedAt = clock()))
     }
 
-    override fun loadAllSkills(): List<SkillRecord> {
+    override suspend fun loadAllSkills(): List<SkillRecord> {
         val merged = linkedMapOf<String, SkillRecord>()
         builtinRecords().forEach { record ->
             merged[record.skillId] = record
@@ -128,19 +125,16 @@ class RoomSkillStore(
         }
     }
 
-    private fun persistedRecords(): List<SkillRecord> {
-        return runBlocking { skillDao.getAll() }
-            .map { entity -> entity.toSkillRecord() }
+    private suspend fun persistedRecords(): List<SkillRecord> {
+        return skillDao.getAll().map { entity -> entity.toSkillRecord() }
     }
 
-    private fun findSkillRecord(skillId: String): SkillRecord? {
+    private suspend fun findSkillRecord(skillId: String): SkillRecord? {
         return loadAllSkills().firstOrNull { it.skillId == skillId }
     }
 
-    private fun persistRecord(record: SkillRecord) {
-        runBlocking {
-            skillDao.insert(record.toEntity())
-        }
+    private suspend fun persistRecord(record: SkillRecord) {
+        skillDao.insert(record.toEntity())
     }
 }
 

@@ -20,6 +20,7 @@ import com.phoneclaw.app.skills.SkillActionBinding
 import com.phoneclaw.app.skills.StoreBackedSkillRegistry
 import java.io.File
 import java.nio.file.Files
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -59,7 +60,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun loadAllEnabledActions_keepsPendingLearnedSkillOutOfRuntimeRegistry() {
+    fun loadAllEnabledActions_keepsPendingLearnedSkillOutOfRuntimeRegistry() = runTest {
         store.saveLearnedSkill(
             manifest = learnedManifest(enabled = true),
             bindings = listOf(
@@ -84,7 +85,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun updateReviewStatus_approvedSkillEntersRuntimeRegistry() {
+    fun updateReviewStatus_approvedSkillEntersRuntimeRegistry() = runTest {
         store.saveLearnedSkill(
             manifest = learnedManifest(enabled = true),
             bindings = listOf(
@@ -110,7 +111,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun saveLearnedSkill_persistsPageGraphAndEvidence() {
+    fun saveLearnedSkill_persistsPageGraphAndEvidence() = runTest {
         store.saveLearnedSkill(
             manifest = learnedManifest(enabled = true),
             bindings = listOf(
@@ -139,7 +140,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun saveLearnedSkill_keepsExistingArtifactsWhenLaterSaveOmitsThem() {
+    fun saveLearnedSkill_keepsExistingArtifactsWhenLaterSaveOmitsThem() = runTest {
         store.saveLearnedSkill(
             manifest = learnedManifest(enabled = true),
             bindings = listOf(
@@ -172,7 +173,7 @@ class RoomSkillStoreTest {
     }
 
     @Test
-    fun setSkillEnabled_persistsBuiltinOverrides() {
+    fun setSkillEnabled_persistsBuiltinOverrides() = runTest {
         store.setSkillEnabled("sample.builtin", enabled = false)
 
         assertEquals(emptyList<String>(), store.loadAllEnabledActions().map { it.actionId })

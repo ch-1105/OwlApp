@@ -1,5 +1,6 @@
 # Android / Gradle
 .gradle/
+.gradle-user/
 .gradle-user-home/
 build/
 **/build/
@@ -46,6 +47,9 @@ keystore.properties
 
 # Docs kept local only
 doc/
+
+# Claude Code
+.claude/
 
 # OS files
 .DS_Store

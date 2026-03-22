@@ -48,6 +48,12 @@ internal fun NodeSnapshotInput.toSnapshot(): AccessibilityNodeSnapshot {
     )
 }
 
+fun PageTreeSnapshot.flattenNodes(): List<AccessibilityNodeSnapshot> {
+    val result = mutableListOf<AccessibilityNodeSnapshot>()
+    nodes.forEach { collectAll(it, result) }
+    return result
+}
+
 fun PageTreeSnapshot.totalNodeCount(): Int {
     return nodes.sumOf { it.totalNodeCount() }
 }
@@ -58,6 +64,11 @@ fun PageTreeSnapshot.findNode(nodeId: String): AccessibilityNodeSnapshot? {
 
 private fun AccessibilityNodeSnapshot.totalNodeCount(): Int {
     return 1 + children.sumOf { it.totalNodeCount() }
+}
+
+private fun collectAll(node: AccessibilityNodeSnapshot, result: MutableList<AccessibilityNodeSnapshot>) {
+    result += node
+    node.children.forEach { collectAll(it, result) }
 }
 
 private fun AccessibilityNodeSnapshot.findDescendant(nodeId: String): AccessibilityNodeSnapshot? {

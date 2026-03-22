@@ -12,6 +12,7 @@ import com.phoneclaw.app.learner.ExplorationStatus
 import com.phoneclaw.app.learner.LearningEvidence
 import com.phoneclaw.app.learner.LearningSessionManager
 import com.phoneclaw.app.learner.LearningSessionState
+import com.phoneclaw.app.notification.ExplorationNotifier
 import com.phoneclaw.app.scanner.AppScanner
 import com.phoneclaw.app.skills.SkillActionBinding
 import com.phoneclaw.app.store.SKILL_REVIEW_APPROVED
@@ -60,6 +61,7 @@ class ExploreViewModel(
     private val learningSessionManager: LearningSessionManager,
     private val skillStore: SkillStore,
     private val explorationAgent: ExplorationAgent? = null,
+    private val explorationNotifier: ExplorationNotifier? = null,
     private val workDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ExploreUiState())
@@ -152,6 +154,7 @@ class ExploreViewModel(
                             _uiState.update { current ->
                                 current.copy(explorationProgress = progress)
                             }
+                            explorationNotifier?.showProgress(progress)
                         },
                     )
                 }
@@ -172,6 +175,10 @@ class ExploreViewModel(
                     }
                 }
                 val reviewItems = withContext(workDispatcher) { loadReviewItems() }
+                explorationNotifier?.showCompleted(
+                    pagesDiscovered = outcome.pagesDiscovered,
+                    draftsGenerated = outcome.drafts.size,
+                )
                 _uiState.update { current ->
                     current.copy(
                         isLoading = false,
@@ -185,6 +192,7 @@ class ExploreViewModel(
                     )
                 }
             }.onFailure { error ->
+                explorationNotifier?.showFailed(error.message ?: "自主探索失败")
                 _uiState.update { current ->
                     current.copy(
                         isLoading = false,
@@ -519,6 +527,7 @@ class ExploreViewModelFactory(
     private val learningSessionManager: LearningSessionManager,
     private val skillStore: SkillStore,
     private val explorationAgent: ExplorationAgent? = null,
+    private val explorationNotifier: ExplorationNotifier? = null,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ExploreViewModel::class.java)) {
@@ -528,6 +537,7 @@ class ExploreViewModelFactory(
                 learningSessionManager = learningSessionManager,
                 skillStore = skillStore,
                 explorationAgent = explorationAgent,
+                explorationNotifier = explorationNotifier,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

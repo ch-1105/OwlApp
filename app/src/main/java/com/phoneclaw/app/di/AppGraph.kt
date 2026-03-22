@@ -41,6 +41,8 @@ import com.phoneclaw.app.model.DefaultSummaryService
 import com.phoneclaw.app.model.FallbackCloudModelAdapter
 import com.phoneclaw.app.model.HttpCloudModelAdapter
 import com.phoneclaw.app.model.StubCloudModelAdapter
+import com.phoneclaw.app.notification.AndroidExplorationNotifier
+import com.phoneclaw.app.notification.ExplorationNotifier
 import com.phoneclaw.app.policy.DefaultPolicyEngine
 import com.phoneclaw.app.scanner.AppScanner
 import com.phoneclaw.app.scanner.AuthorizationManager
@@ -123,6 +125,7 @@ class AppGraph(
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { appContext.startActivity(intent) }.isSuccess
     }
+    val explorationNotifier: ExplorationNotifier = AndroidExplorationNotifier(appContext)
     val explorationStrategy: ExplorationStrategy = AiExplorationStrategy(
         modelPort = modelPort,
         allowCloud = cloudConfig.remoteEnabled,

@@ -73,6 +73,7 @@ fun PhoneClawApp(
                 learningSessionManager = appGraph.learningSessionManager,
                 skillStore = appGraph.skillStore,
                 explorationAgent = appGraph.explorationAgent,
+                explorationNotifier = appGraph.explorationNotifier,
             ),
         )
         val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()

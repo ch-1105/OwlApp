@@ -62,7 +62,13 @@ fun PhoneClawApp(
 ) {
     PhoneClawTheme {
         val chatViewModel: MainViewModel = viewModel(
-            factory = MainViewModelFactory(appGraph.gateway),
+            factory = MainViewModelFactory(
+                gateway = appGraph.gateway,
+                explorationAgent = appGraph.explorationAgent,
+                appScanner = appGraph.appScanner,
+                skillStore = appGraph.skillStore,
+                explorationNotifier = appGraph.explorationNotifier,
+            ),
         )
         val appsViewModel: AppsViewModel = viewModel(
             factory = AppsViewModelFactory(appGraph.appScanner, appGraph.authorizationManager),

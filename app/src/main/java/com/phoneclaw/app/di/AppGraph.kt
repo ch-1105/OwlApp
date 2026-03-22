@@ -8,6 +8,8 @@ import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
 import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_1_2
 import com.phoneclaw.app.data.db.PHONECLAW_DB_MIGRATION_2_3
 import com.phoneclaw.app.data.db.PhoneClawDatabase
+import com.phoneclaw.app.executor.AccessibilityExecutor
+import com.phoneclaw.app.executor.ExecutorRouter
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.explorer.AccessibilityAppExplorer
 import com.phoneclaw.app.explorer.AppExplorer
@@ -141,7 +143,16 @@ class AppGraph(
     val telemetryPort: TelemetryPort = LogcatTelemetry()
     val auditPort: AuditPort = FileAuditTrail(File(appContext.filesDir, "audit"))
     val policyPort: PolicyPort = DefaultPolicyEngine(skillRegistry)
-    val executorPort: ExecutorPort = IntentActionExecutor(appContext, skillRegistry)
+    private val intentExecutor: ExecutorPort = IntentActionExecutor(appContext, skillRegistry)
+    private val accessibilityExecutor: ExecutorPort = AccessibilityExecutor(
+        appExplorer = appExplorer,
+        appLauncher = appLauncher,
+        skillStore = skillStore,
+    )
+    val executorPort: ExecutorPort = ExecutorRouter(
+        intentExecutor = intentExecutor,
+        accessibilityExecutor = accessibilityExecutor,
+    )
     val gateway: Gateway = DefaultGateway(
         plannerPort = plannerPort,
         policyPort = policyPort,

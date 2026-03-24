@@ -10,6 +10,10 @@ import com.phoneclaw.app.contracts.SkillActionManifest
 import com.phoneclaw.app.contracts.SkillManifest
 import com.phoneclaw.app.explorer.AccessibilityNodeSnapshot
 import com.phoneclaw.app.explorer.PageTreeSnapshot
+import com.phoneclaw.app.learner.ExplorationAgent
+import com.phoneclaw.app.learner.ExplorationBudget
+import com.phoneclaw.app.learner.ExplorationOutcome
+import com.phoneclaw.app.learner.ExplorationProgress
 import com.phoneclaw.app.gateway.ports.ClickableElementSuggestion
 import com.phoneclaw.app.gateway.ports.PageAnalysisResult
 import com.phoneclaw.app.learner.ExplorationTransition
@@ -54,6 +58,7 @@ class ExploreViewModelTest {
             learningSessionManager = learningSessionManager,
             skillStore = skillStore,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         advanceUntilIdle()
@@ -91,6 +96,7 @@ class ExploreViewModelTest {
             learningSessionManager = FakeLearningSessionManager(sampleDraft()),
             skillStore = skillStore,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         advanceUntilIdle()
@@ -115,6 +121,7 @@ class ExploreViewModelTest {
             learningSessionManager = learningSessionManager,
             skillStore = FakeSkillStore(saveError = IllegalStateException("db down")),
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         advanceUntilIdle()
@@ -140,6 +147,7 @@ class ExploreViewModelTest {
             learningSessionManager = FakeLearningSessionManager(sampleDraft()),
             skillStore = skillStore,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         advanceUntilIdle()
@@ -165,6 +173,7 @@ class ExploreViewModelTest {
             learningSessionManager = FakeLearningSessionManager(sampleDraft()),
             skillStore = skillStore,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         advanceUntilIdle()
@@ -178,6 +187,45 @@ class ExploreViewModelTest {
         )
     }
     @Test
+    fun startLearning_whenAccessibilityDisconnected_showsHelpfulError() = runTest {
+        val learningSessionManager = FakeLearningSessionManager(sampleDraft())
+        val viewModel = ExploreViewModel(
+            appScanner = FakeAppScanner(emptyList()),
+            learningSessionManager = learningSessionManager,
+            skillStore = FakeSkillStore(),
+            workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { false },
+        )
+
+        advanceUntilIdle()
+        viewModel.startLearning(sampleSnapshot())
+        advanceUntilIdle()
+
+        assertEquals(0, learningSessionManager.startedSessionCount)
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("无障碍服务"))
+    }
+
+    @Test
+    fun startAutonomousExploration_whenAccessibilityDisconnected_showsHelpfulError() = runTest {
+        val fakeAgent = FakeExplorationAgent()
+        val viewModel = ExploreViewModel(
+            appScanner = FakeAppScanner(emptyList()),
+            learningSessionManager = FakeLearningSessionManager(sampleDraft()),
+            skillStore = FakeSkillStore(),
+            explorationAgent = fakeAgent,
+            workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { false },
+        )
+
+        advanceUntilIdle()
+        viewModel.startAutonomousExploration(sampleSnapshot())
+        advanceUntilIdle()
+
+        assertEquals(0, fakeAgent.exploreCallCount)
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("无障碍服务"))
+    }
+
+    @Test
     fun rejectSkill_marksDraftRejectedAndDisabled() = runTest {
         val skillStore = FakeSkillStore(
             mutableMapOf(
@@ -189,6 +237,7 @@ class ExploreViewModelTest {
             learningSessionManager = FakeLearningSessionManager(sampleDraft()),
             skillStore = skillStore,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         advanceUntilIdle()
@@ -215,8 +264,10 @@ private class FakeLearningSessionManager(
 ) : LearningSessionManager {
     private val sessions = linkedMapOf<String, LearningSessionState>()
     val discardedSessionIds = mutableListOf<String>()
+    var startedSessionCount = 0
 
     override suspend fun startLearning(appPackage: String, appName: String): String {
+        startedSessionCount += 1
         val sessionId = "session-1"
         sessions[sessionId] = LearningSessionState(
             appPackage = appPackage,
@@ -262,6 +313,26 @@ private class FakeLearningSessionManager(
     override fun discardSession(sessionId: String) {
         discardedSessionIds += sessionId
         sessions.remove(sessionId)
+    }
+}
+
+private class FakeExplorationAgent : ExplorationAgent {
+    var exploreCallCount = 0
+
+    override suspend fun explore(
+        appPackage: String,
+        appName: String,
+        budget: ExplorationBudget,
+        onProgress: (ExplorationProgress) -> Unit,
+    ): ExplorationOutcome {
+        exploreCallCount += 1
+        return ExplorationOutcome(
+            appPackage = appPackage,
+            appName = appName,
+            pagesDiscovered = 1,
+            transitionsRecorded = 0,
+            drafts = emptyList(),
+        )
     }
 }
 
@@ -464,4 +535,6 @@ private fun installedApp(
         iconDrawable = null,
     )
 }
+
+
 

@@ -1,9 +1,11 @@
 package com.phoneclaw.app.ui.explore
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.phoneclaw.app.contracts.PageGraph
+import com.phoneclaw.app.explorer.AccessibilityCaptureBridge
 import com.phoneclaw.app.contracts.SkillManifest
 import com.phoneclaw.app.explorer.PageTreeSnapshot
 import com.phoneclaw.app.learner.ExplorationAgent
@@ -29,6 +31,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val LEARNING_LOG_TAG = "PhoneClawLearn"
+
+private fun debugLog(message: String) {
+    runCatching {
+        Log.d(LEARNING_LOG_TAG, message)
+    }
+}
 
 data class ReviewSkillItem(
     val skillId: String,
@@ -63,6 +73,9 @@ class ExploreViewModel(
     private val explorationAgent: ExplorationAgent? = null,
     private val explorationNotifier: ExplorationNotifier? = null,
     private val workDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val isAccessibilityServiceConnected: () -> Boolean = {
+        AccessibilityCaptureBridge.serviceConnected.value
+    },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ExploreUiState())
     val uiState: StateFlow<ExploreUiState> = _uiState.asStateFlow()
@@ -72,6 +85,9 @@ class ExploreViewModel(
     }
 
     fun startLearning(snapshot: PageTreeSnapshot?) {
+        if (!ensureAccessibilityServiceConnected()) {
+            return
+        }
         if (snapshot == null) {
             showError("还没有可用页面快照，先刷新一次当前页面。")
             return
@@ -112,6 +128,9 @@ class ExploreViewModel(
     }
 
     fun startAutonomousExploration(snapshot: PageTreeSnapshot?) {
+        if (!ensureAccessibilityServiceConnected()) {
+            return
+        }
         if (snapshot == null) {
             showError("还没有可用页面快照，先刷新一次当前页面。")
             return
@@ -211,6 +230,9 @@ class ExploreViewModel(
             showError("还没有学习会话，先开始学习当前应用。")
             return
         }
+        if (!ensureAccessibilityServiceConnected()) {
+            return
+        }
 
         viewModelScope.launch {
             setLoading(true)
@@ -239,6 +261,9 @@ class ExploreViewModel(
         val sessionId = uiState.value.activeSessionId
         if (sessionId == null) {
             showError("还没有学习会话，先开始学习当前应用。")
+            return
+        }
+        if (!ensureAccessibilityServiceConnected()) {
             return
         }
 
@@ -445,6 +470,18 @@ class ExploreViewModel(
             .toList()
     }
 
+    private fun ensureAccessibilityServiceConnected(): Boolean {
+        if (isAccessibilityServiceConnected()) {
+            return true
+        }
+
+        debugLog(
+            "Explore action blocked connected=${AccessibilityCaptureBridge.serviceConnected.value} latestPackage=${AccessibilityCaptureBridge.latestSnapshot.value?.packageName} activeSession=${uiState.value.activeSessionId}",
+        )
+        showError("无障碍服务未连接，请先重新开启 PhoneClaw 无障碍服务。")
+        return false
+    }
+
     private fun updateSessionError(sessionId: String, message: String) {
         _uiState.update { current ->
             current.copy(
@@ -543,6 +580,10 @@ class ExploreViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
+
+
+
+
 
 
 

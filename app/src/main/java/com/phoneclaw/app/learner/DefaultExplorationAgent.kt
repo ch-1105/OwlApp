@@ -9,9 +9,12 @@ import com.phoneclaw.app.gateway.ports.PageAnalysisResult
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 
-private const val LAUNCH_WAIT_MS = 2000L
-private const val PAGE_SETTLE_MS = 300L
+private const val DEFAULT_LAUNCH_INITIAL_WAIT_MS = 2000L
+private const val DEFAULT_LAUNCH_RETRY_DELAY_MS = 500L
+private const val DEFAULT_LAUNCH_TIMEOUT_MS = 6_000L
+private const val DEFAULT_PAGE_SETTLE_MS = 300L
 private const val MAX_CANDIDATES_PER_PAGE = 8
 
 class DefaultExplorationAgent(
@@ -20,6 +23,10 @@ class DefaultExplorationAgent(
     private val pageAnalysisPort: PageAnalysisPort,
     private val skillLearner: SkillLearner,
     private val strategy: ExplorationStrategy = HeuristicExplorationStrategy(),
+    private val launchInitialWaitMs: Long = DEFAULT_LAUNCH_INITIAL_WAIT_MS,
+    private val launchRetryDelayMs: Long = DEFAULT_LAUNCH_RETRY_DELAY_MS,
+    private val launchTimeoutMs: Long = DEFAULT_LAUNCH_TIMEOUT_MS,
+    private val pageSettleMs: Long = DEFAULT_PAGE_SETTLE_MS,
 ) : ExplorationAgent {
 
     override suspend fun explore(
@@ -33,7 +40,6 @@ class DefaultExplorationAgent(
         if (!appLauncher.launch(appPackage)) {
             throw IllegalStateException("无法启动应用 $appPackage。")
         }
-        delay(LAUNCH_WAIT_MS)
 
         val visited = mutableSetOf<String>()
         val visitedNames = mutableListOf<String>()
@@ -50,8 +56,7 @@ class DefaultExplorationAgent(
                 job.isActive
         }
 
-        // Capture initial page
-        val initial = captureAndAnalyze(appPackage) ?: return emptyOutcome(appPackage, appName)
+        val initial = awaitInitialPage(appPackage)
         visited += initial.pageId
         visitedNames += initial.pageName
         pages += initial
@@ -59,7 +64,6 @@ class DefaultExplorationAgent(
 
         onProgress(progressOf(1, initial.pageName, 0, stepsUsed, budget, ExplorationStatus.EXPLORING))
 
-        // Main exploration loop
         while (budgetRemaining() && stack.isNotEmpty()) {
             val frame = stack.last()
 
@@ -68,7 +72,7 @@ class DefaultExplorationAgent(
                 if (stack.isNotEmpty()) {
                     appExplorer.performBack()
                     stepsUsed++
-                    delay(PAGE_SETTLE_MS)
+                    delay(pageSettleMs)
                 }
                 continue
             }
@@ -76,21 +80,18 @@ class DefaultExplorationAgent(
             val candidate = frame.untried.removeAt(0)
             val fromPageId = frame.pageId
 
-            // Click the candidate
             appExplorer.performClick(candidate.nodeId)
             stepsUsed++
 
-            // Capture result
-            val result = captureAndAnalyze(appPackage)
-            if (result == null) {
-                // Capture failed, try to go back
+            val capture = captureAndAnalyze(appPackage)
+            if (capture !is CaptureOutcome.Captured) {
                 appExplorer.performBack()
                 stepsUsed++
-                delay(PAGE_SETTLE_MS)
+                delay(pageSettleMs)
                 continue
             }
 
-            // Record transition
+            val result = capture.page
             transitions += ExplorationTransition(
                 fromPageId = fromPageId,
                 toPageId = result.pageId,
@@ -99,58 +100,76 @@ class DefaultExplorationAgent(
             )
 
             if (result.pageId in visited) {
-                // Already visited this page, go back
                 appExplorer.performBack()
                 stepsUsed++
-                delay(PAGE_SETTLE_MS)
-                onProgress(progressOf(
-                    visited.size, result.pageName, transitions.size, stepsUsed, budget,
-                    ExplorationStatus.EXPLORING,
-                ))
+                delay(pageSettleMs)
+                onProgress(
+                    progressOf(
+                        pagesDiscovered = visited.size,
+                        currentPageName = result.pageName,
+                        transitionsRecorded = transitions.size,
+                        stepsUsed = stepsUsed,
+                        budget = budget,
+                        status = ExplorationStatus.EXPLORING,
+                    ),
+                )
                 continue
             }
 
-            // New page discovered
             visited += result.pageId
             visitedNames += result.pageName
             pages += result
 
-            onProgress(progressOf(
-                visited.size, result.pageName, transitions.size, stepsUsed, budget,
-                ExplorationStatus.EXPLORING,
-            ))
+            onProgress(
+                progressOf(
+                    pagesDiscovered = visited.size,
+                    currentPageName = result.pageName,
+                    transitionsRecorded = transitions.size,
+                    stepsUsed = stepsUsed,
+                    budget = budget,
+                    status = ExplorationStatus.EXPLORING,
+                ),
+            )
 
             if (stack.size >= budget.maxDepth) {
-                // Max depth reached, go back
                 appExplorer.performBack()
                 stepsUsed++
-                delay(PAGE_SETTLE_MS)
+                delay(pageSettleMs)
                 continue
             }
 
-            // Push candidates for the new page
             pushCandidates(stack, result, visited, visitedNames, transitions, budget, stepsUsed)
             if (stack.last().untried.isEmpty()) {
-                // Nothing clickable here, go back
                 stack.removeLast()
                 appExplorer.performBack()
                 stepsUsed++
-                delay(PAGE_SETTLE_MS)
+                delay(pageSettleMs)
             }
         }
 
-        // Generate skill draft
-        onProgress(progressOf(
-            visited.size, "", transitions.size, stepsUsed, budget,
-            ExplorationStatus.GENERATING,
-        ))
+        onProgress(
+            progressOf(
+                pagesDiscovered = visited.size,
+                currentPageName = "",
+                transitionsRecorded = transitions.size,
+                stepsUsed = stepsUsed,
+                budget = budget,
+                status = ExplorationStatus.GENERATING,
+            ),
+        )
 
         val draft = generateDraft(appPackage, appName, pages, transitions)
 
-        onProgress(progressOf(
-            visited.size, "", transitions.size, stepsUsed, budget,
-            ExplorationStatus.COMPLETED,
-        ))
+        onProgress(
+            progressOf(
+                pagesDiscovered = visited.size,
+                currentPageName = "",
+                transitionsRecorded = transitions.size,
+                stepsUsed = stepsUsed,
+                budget = budget,
+                status = ExplorationStatus.COMPLETED,
+            ),
+        )
 
         return ExplorationOutcome(
             appPackage = appPackage,
@@ -161,9 +180,34 @@ class DefaultExplorationAgent(
         )
     }
 
-    private suspend fun captureAndAnalyze(appPackage: String): DiscoveredPage? {
-        val exploration = appExplorer.captureCurrentPage() ?: return null
-        if (exploration.packageName != appPackage) return null
+    private suspend fun awaitInitialPage(appPackage: String): DiscoveredPage {
+        if (launchInitialWaitMs > 0) {
+            delay(launchInitialWaitMs)
+        }
+
+        var lastObservedPackage: String? = null
+        val initialPage = withTimeoutOrNull(launchTimeoutMs) {
+            while (coroutineContext.isActive) {
+                when (val capture = captureAndAnalyze(appPackage)) {
+                    is CaptureOutcome.Captured -> return@withTimeoutOrNull capture.page
+                    is CaptureOutcome.WrongPackage -> lastObservedPackage = capture.packageName
+                    CaptureOutcome.MissingSnapshot -> Unit
+                }
+
+                delay(launchRetryDelayMs)
+            }
+
+            null
+        }
+
+        return initialPage ?: throw initialCaptureFailure(appPackage, lastObservedPackage)
+    }
+
+    private suspend fun captureAndAnalyze(appPackage: String): CaptureOutcome {
+        val exploration = appExplorer.captureCurrentPage() ?: return CaptureOutcome.MissingSnapshot
+        if (exploration.packageName != appPackage) {
+            return CaptureOutcome.WrongPackage(exploration.packageName)
+        }
 
         val analysis = pageAnalysisPort.analyzePage(
             appPackage = appPackage,
@@ -171,14 +215,16 @@ class DefaultExplorationAgent(
             screenshot = exploration.screenshot,
         )
 
-        return DiscoveredPage(
-            pageId = analysis.suggestedPageSpec.pageId,
-            pageName = analysis.suggestedPageSpec.pageName,
-            packageName = exploration.packageName,
-            pageTree = exploration.pageTree,
-            analysis = analysis,
-            screenshot = exploration.screenshot,
-            capturedAt = exploration.capturedAt,
+        return CaptureOutcome.Captured(
+            DiscoveredPage(
+                pageId = analysis.suggestedPageSpec.pageId,
+                pageName = analysis.suggestedPageSpec.pageName,
+                packageName = exploration.packageName,
+                pageTree = exploration.pageTree,
+                analysis = analysis,
+                screenshot = exploration.screenshot,
+                capturedAt = exploration.capturedAt,
+            ),
         )
     }
 
@@ -208,12 +254,14 @@ class DefaultExplorationAgent(
             strategy.selectCandidates(context, raw)
         }.getOrDefault(raw)
 
-        if (ordered.isNotEmpty()) {
-            stack.addLast(ExplorationFrame(
+        if (ordered.isEmpty()) return
+
+        stack.addLast(
+            ExplorationFrame(
                 pageId = page.pageId,
                 untried = ordered.toMutableList(),
-            ))
-        }
+            ),
+        )
     }
 
     private suspend fun generateDraft(
@@ -242,6 +290,21 @@ class DefaultExplorationAgent(
                 pages = inputs,
             )
         }.getOrNull()
+    }
+
+    private fun initialCaptureFailure(
+        appPackage: String,
+        lastObservedPackage: String?,
+    ): IllegalStateException {
+        if (!lastObservedPackage.isNullOrBlank()) {
+            return IllegalStateException(
+                "已启动应用 $appPackage，但无障碍当前仍看到 $lastObservedPackage。",
+            )
+        }
+
+        return IllegalStateException(
+            "已启动应用 $appPackage，但无障碍未采集到可用页面。",
+        )
     }
 }
 
@@ -282,16 +345,6 @@ private fun progressOf(
     )
 }
 
-private fun emptyOutcome(appPackage: String, appName: String): ExplorationOutcome {
-    return ExplorationOutcome(
-        appPackage = appPackage,
-        appName = appName,
-        pagesDiscovered = 0,
-        transitionsRecorded = 0,
-        drafts = emptyList(),
-    )
-}
-
 private data class DiscoveredPage(
     val pageId: String,
     val pageName: String,
@@ -306,3 +359,11 @@ private data class ExplorationFrame(
     val pageId: String,
     val untried: MutableList<ClickCandidate>,
 )
+
+private sealed interface CaptureOutcome {
+    data class Captured(val page: DiscoveredPage) : CaptureOutcome
+
+    data object MissingSnapshot : CaptureOutcome
+
+    data class WrongPackage(val packageName: String) : CaptureOutcome
+}

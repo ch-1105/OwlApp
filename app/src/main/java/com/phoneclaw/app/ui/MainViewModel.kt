@@ -1,10 +1,12 @@
 package com.phoneclaw.app.ui
 
 import androidx.lifecycle.ViewModel
+import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.phoneclaw.app.contracts.TaskSnapshot
 import com.phoneclaw.app.contracts.TaskState
+import com.phoneclaw.app.explorer.AccessibilityCaptureBridge
 import com.phoneclaw.app.gateway.Gateway
 import com.phoneclaw.app.learner.ExplorationAgent
 import com.phoneclaw.app.learner.ExplorationStatus
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val LEARNING_LOG_TAG = "PhoneClawLearn"
 
 enum class ChatRole {
     USER,
@@ -61,6 +65,9 @@ class MainViewModel(
     private val skillStore: SkillStore? = null,
     private val explorationNotifier: ExplorationNotifier? = null,
     private val workDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val isAccessibilityServiceConnected: () -> Boolean = {
+        AccessibilityCaptureBridge.serviceConnected.value
+    },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -131,6 +138,14 @@ class MainViewModel(
 
     private fun startChatExploration(target: ExplorationTarget) {
         val agent = explorationAgent ?: return
+        if (!isAccessibilityServiceConnected()) {
+            debugLog(
+                "Chat exploration blocked app=${target.appName} connected=${AccessibilityCaptureBridge.serviceConnected.value} latestPackage=${AccessibilityCaptureBridge.latestSnapshot.value?.packageName}",
+            )
+            _uiState.update { current -> current.copy(isRunning = false) }
+            postAssistantMessage(accessibilityDisconnectedMessage(target.appName))
+            return
+        }
 
         postAssistantMessage("好的，我开始自主学习「${target.appName}」。探索过程中会持续反馈进度。")
 
@@ -329,6 +344,16 @@ private data class ExplorationTarget(
     val appName: String,
 )
 
+private fun debugLog(message: String) {
+    runCatching {
+        Log.d(LEARNING_LOG_TAG, message)
+    }
+}
+
+private fun accessibilityDisconnectedMessage(appName: String): String {
+    return "现在还不能学习「$appName」。\n请先到「学习」页重新开启 PhoneClaw 无障碍服务。"
+}
+
 private val EXPLORATION_PATTERNS = listOf(
     Regex("^(?:学习|探索|学会?用?)\\s*[「「【]?(.+?)[」」】]?$"),
     Regex("^(?:帮我)?(?:学习|探索|学会?用?)\\s*(.+)$"),
@@ -374,3 +399,8 @@ class MainViewModelFactory(
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
+
+
+
+
+

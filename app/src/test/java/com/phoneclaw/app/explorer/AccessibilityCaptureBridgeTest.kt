@@ -4,6 +4,7 @@ import android.graphics.Rect
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -40,36 +41,40 @@ class AccessibilityCaptureBridgeTest {
     fun detach_marksDisconnectedWhenActiveServiceDetaches() {
         val activeService = Robolectric.buildService(PhoneClawAccessibilityService::class.java).get()
 
+        AccessibilityCaptureBridge.publishSnapshot(sampleSnapshot())
         AccessibilityCaptureBridge.attach(activeService)
         AccessibilityCaptureBridge.detach(activeService)
 
         assertFalse(AccessibilityCaptureBridge.serviceConnected.value)
+        assertNull(AccessibilityCaptureBridge.latestSnapshot.value)
     }
 
     @Test
     fun publishSnapshot_marksServiceConnected() {
-        AccessibilityCaptureBridge.publishSnapshot(
-            PageTreeSnapshot(
-                packageName = "com.phoneclaw.app",
-                activityName = "MainActivity",
-                timestamp = 123L,
-                nodes = listOf(
-                    NodeSnapshotInput(
-                        nodeId = "0",
-                        className = "android.view.View",
-                        text = "root",
-                        contentDescription = null,
-                        resourceId = null,
-                        isClickable = false,
-                        isScrollable = false,
-                        isEditable = false,
-                        bounds = Rect(0, 0, 10, 10),
-                        children = emptyList(),
-                    ).toSnapshot(),
-                ),
-            ),
-        )
+        AccessibilityCaptureBridge.publishSnapshot(sampleSnapshot())
 
         assertTrue(AccessibilityCaptureBridge.serviceConnected.value)
     }
+}
+
+private fun sampleSnapshot(): PageTreeSnapshot {
+    return PageTreeSnapshot(
+        packageName = "com.phoneclaw.app",
+        activityName = "MainActivity",
+        timestamp = 123L,
+        nodes = listOf(
+            NodeSnapshotInput(
+                nodeId = "0",
+                className = "android.view.View",
+                text = "root",
+                contentDescription = null,
+                resourceId = null,
+                isClickable = false,
+                isScrollable = false,
+                isEditable = false,
+                bounds = Rect(0, 0, 10, 10),
+                children = emptyList(),
+            ).toSnapshot(),
+        ),
+    )
 }

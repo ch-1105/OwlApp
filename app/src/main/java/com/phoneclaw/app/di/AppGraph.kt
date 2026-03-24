@@ -2,6 +2,7 @@ package com.phoneclaw.app.di
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.room.Room
 import com.phoneclaw.app.audit.FileAuditTrail
 import com.phoneclaw.app.data.db.PHONECLAW_DATABASE_NAME
@@ -12,6 +13,7 @@ import com.phoneclaw.app.executor.AccessibilityExecutor
 import com.phoneclaw.app.executor.ExecutorRouter
 import com.phoneclaw.app.executor.IntentActionExecutor
 import com.phoneclaw.app.explorer.AccessibilityAppExplorer
+import com.phoneclaw.app.explorer.AccessibilityCaptureBridge
 import com.phoneclaw.app.explorer.AppExplorer
 import com.phoneclaw.app.gateway.DefaultGateway
 import com.phoneclaw.app.gateway.Gateway
@@ -33,7 +35,6 @@ import com.phoneclaw.app.learner.DefaultExplorationAgent
 import com.phoneclaw.app.learner.DefaultLearningSessionManager
 import com.phoneclaw.app.learner.ExplorationAgent
 import com.phoneclaw.app.learner.ExplorationStrategy
-import com.phoneclaw.app.learner.HeuristicExplorationStrategy
 import com.phoneclaw.app.learner.LearningSessionManager
 import com.phoneclaw.app.learner.SkillLearner
 import com.phoneclaw.app.model.BuildConfigCloudModelConfig
@@ -57,6 +58,9 @@ import com.phoneclaw.app.store.RoomSkillStore
 import com.phoneclaw.app.store.SkillStore
 import com.phoneclaw.app.telemetry.LogcatTelemetry
 import java.io.File
+
+private const val LEARNING_LOG_TAG = "PhoneClawLearn"
+private const val LAUNCH_HOME_SETTLE_MS = 400L
 
 class AppGraph(
     appContext: Context,
@@ -123,9 +127,52 @@ class AppGraph(
         skillLearner = skillLearner,
     )
     val appLauncher: AppLauncher = AppLauncher { packageName ->
-        val intent = appContext.packageManager.getLaunchIntentForPackage(packageName) ?: return@AppLauncher false
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { appContext.startActivity(intent) }.isSuccess
+        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(packageName)
+            ?: return@AppLauncher false
+
+        val homePrepared = runCatching {
+            val usedAccessibilityHome = AccessibilityCaptureBridge.performHome()
+            if (!usedAccessibilityHome) {
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                appContext.startActivity(homeIntent)
+            }
+            Thread.sleep(LAUNCH_HOME_SETTLE_MS)
+            Log.d(
+                LEARNING_LOG_TAG,
+                "AppLauncher prepared home package=$packageName usedAccessibilityHome=$usedAccessibilityHome",
+            )
+            true
+        }.getOrElse { error ->
+            Log.d(
+                LEARNING_LOG_TAG,
+                "AppLauncher failed to prepare home package=$packageName error=${error.message}",
+            )
+            false
+        }
+
+        launchIntent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP,
+        )
+
+        runCatching {
+            appContext.startActivity(launchIntent)
+            Log.d(
+                LEARNING_LOG_TAG,
+                "AppLauncher launched package=$packageName homePrepared=$homePrepared",
+            )
+            true
+        }.getOrElse { error ->
+            Log.d(
+                LEARNING_LOG_TAG,
+                "AppLauncher launch failed package=$packageName error=${error.message}",
+            )
+            false
+        }
     }
     val explorationNotifier: ExplorationNotifier = AndroidExplorationNotifier(appContext)
     val explorationStrategy: ExplorationStrategy = AiExplorationStrategy(

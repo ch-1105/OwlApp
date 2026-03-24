@@ -37,6 +37,7 @@ class MainViewModelTest {
             explorationAgent = fakeAgent,
             appScanner = fakeScanner,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         vm.onPromptChange("学习微信")
@@ -60,6 +61,7 @@ class MainViewModelTest {
             explorationAgent = fakeAgent,
             appScanner = fakeScanner,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         vm.onPromptChange("探索「测试应用」")
@@ -67,6 +69,60 @@ class MainViewModelTest {
         advanceUntilIdle()
 
         assertEquals("com.example.app", fakeAgent.lastExploredPackage)
+    }
+
+    @Test
+    fun submit_systemBrowserExplorationIntent_startsExploration() = runTest {
+        val fakeAgent = FakeExplorationAgent()
+        val fakeScanner = FakeAppScanner(listOf(
+            fakeApp(
+                packageName = "com.android.chromium",
+                appName = "浏览器",
+                isSystemApp = true,
+            ),
+        ))
+
+        val vm = MainViewModel(
+            gateway = FakeGateway(),
+            explorationAgent = fakeAgent,
+            appScanner = fakeScanner,
+            workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
+        )
+
+        vm.onPromptChange("学习浏览器")
+        vm.submit()
+        advanceUntilIdle()
+
+        assertEquals("com.android.chromium", fakeAgent.lastExploredPackage)
+    }
+
+    @Test
+    fun submit_explorationIntent_whenAccessibilityDisconnected_showsHelpfulMessage() = runTest {
+        val fakeAgent = FakeExplorationAgent()
+        val fakeScanner = FakeAppScanner(listOf(
+            fakeApp(
+                packageName = "com.android.chromium",
+                appName = "浏览器",
+                isSystemApp = true,
+            ),
+        ))
+
+        val vm = MainViewModel(
+            gateway = FakeGateway(),
+            explorationAgent = fakeAgent,
+            appScanner = fakeScanner,
+            workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { false },
+        )
+
+        vm.onPromptChange("学习浏览器")
+        vm.submit()
+        advanceUntilIdle()
+
+        assertEquals(null, fakeAgent.lastExploredPackage)
+        assertTrue(vm.uiState.value.messages.any { it.text.contains("无障碍服务") })
+        assertTrue(!vm.uiState.value.isRunning)
     }
 
     @Test
@@ -80,6 +136,7 @@ class MainViewModelTest {
             explorationAgent = fakeAgent,
             appScanner = fakeScanner,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         vm.onPromptChange("学习不存在的应用")
@@ -101,6 +158,7 @@ class MainViewModelTest {
             explorationAgent = fakeAgent,
             appScanner = fakeScanner,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         vm.onPromptChange("打开系统设置")
@@ -121,6 +179,7 @@ class MainViewModelTest {
             explorationAgent = fakeAgent,
             appScanner = fakeScanner,
             workDispatcher = mainDispatcherRule.dispatcher,
+            isAccessibilityServiceConnected = { true },
         )
 
         vm.onPromptChange("学习测试")
@@ -180,13 +239,19 @@ private class FakeAppScanner(private val apps: List<InstalledApp>) : AppScanner 
     override fun scanInstalledApps(): List<InstalledApp> = apps
 }
 
-private fun fakeApp(packageName: String, appName: String): InstalledApp {
+private fun fakeApp(
+    packageName: String,
+    appName: String,
+    isSystemApp: Boolean = false,
+): InstalledApp {
     return InstalledApp(
         packageName = packageName,
         appName = appName,
         versionName = "1.0",
         versionCode = 1L,
-        isSystemApp = false,
+        isSystemApp = isSystemApp,
         iconDrawable = null,
     )
 }
+
+

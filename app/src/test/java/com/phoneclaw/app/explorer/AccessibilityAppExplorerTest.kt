@@ -78,6 +78,11 @@ private class FakeAccessibilityExplorerBridge(
         return latestSnapshotState.value
     }
 
+    override fun capturePageTreeForPackage(targetPackage: String): PageTreeSnapshot? {
+        val snapshot = latestSnapshotState.value
+        return if (snapshot?.packageName == targetPackage) snapshot else null
+    }
+
     override fun performClick(nodeId: String): Boolean {
         clickedNodeIds += nodeId
         if (clickResult && snapshotAfterClick != null) {
@@ -91,6 +96,10 @@ private class FakeAccessibilityExplorerBridge(
             latestSnapshotState.value = snapshotAfterBack
         }
         return backResult
+    }
+
+    override fun performHome(): Boolean {
+        return false
     }
 }
 

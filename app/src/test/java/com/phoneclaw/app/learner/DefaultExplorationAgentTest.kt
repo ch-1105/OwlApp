@@ -14,6 +14,7 @@ import com.phoneclaw.app.gateway.ports.PageAnalysisResult
 import com.phoneclaw.app.skills.SkillActionBinding
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,6 +54,9 @@ class DefaultExplorationAgentTest {
             appExplorer = explorer,
             pageAnalysisPort = SimplePageAnalysisPort(),
             skillLearner = NoOpSkillLearner(),
+            launchInitialWaitMs = 0L,
+            launchRetryDelayMs = 1L,
+            launchTimeoutMs = 10L,
         )
 
         val outcome = agent.explore(
@@ -70,16 +74,32 @@ class DefaultExplorationAgentTest {
 
     @Test
     fun explore_respectsMaxDepthBudget() = runTest {
-        val page1 = testSnapshot(activityName = "Activity1", timestamp = 1L, clickableNodes = listOf(
-            testClickableNode(nodeId = "0/0", text = "Next"),
-        ))
-        val page2 = testSnapshot(activityName = "Activity2", timestamp = 2L, clickableNodes = listOf(
-            testClickableNode(nodeId = "0/0", text = "Next"),
-        ))
-        val page3 = testSnapshot(activityName = "Activity3", timestamp = 3L, clickableNodes = listOf(
-            testClickableNode(nodeId = "0/0", text = "Next"),
-        ))
-        val page4 = testSnapshot(activityName = "Activity4", timestamp = 4L, clickableNodes = emptyList())
+        val page1 = testSnapshot(
+            activityName = "Activity1",
+            timestamp = 1L,
+            clickableNodes = listOf(
+                testClickableNode(nodeId = "0/0", text = "Next"),
+            ),
+        )
+        val page2 = testSnapshot(
+            activityName = "Activity2",
+            timestamp = 2L,
+            clickableNodes = listOf(
+                testClickableNode(nodeId = "0/0", text = "Next"),
+            ),
+        )
+        val page3 = testSnapshot(
+            activityName = "Activity3",
+            timestamp = 3L,
+            clickableNodes = listOf(
+                testClickableNode(nodeId = "0/0", text = "Next"),
+            ),
+        )
+        val page4 = testSnapshot(
+            activityName = "Activity4",
+            timestamp = 4L,
+            clickableNodes = emptyList(),
+        )
 
         val explorer = NavigationFakeExplorer(
             initialPage = page1,
@@ -97,6 +117,9 @@ class DefaultExplorationAgentTest {
             appExplorer = explorer,
             pageAnalysisPort = SimplePageAnalysisPort(),
             skillLearner = NoOpSkillLearner(),
+            launchInitialWaitMs = 0L,
+            launchRetryDelayMs = 1L,
+            launchTimeoutMs = 10L,
         )
 
         val outcome = agent.explore(
@@ -105,10 +128,10 @@ class DefaultExplorationAgentTest {
             budget = ExplorationBudget(maxSteps = 20, maxDepth = 2, maxDurationMs = 30_000L),
         )
 
-        // With maxDepth=2, should discover page1 + page2 + page3 (depth 0,1,2)
-        // but page4 at depth 3 should not be reached
-        assertTrue("Expected at most 3 pages but got ${outcome.pagesDiscovered}",
-            outcome.pagesDiscovered <= 3)
+        assertTrue(
+            "Expected at most 3 pages but got ${outcome.pagesDiscovered}",
+            outcome.pagesDiscovered <= 3,
+        )
     }
 
     @Test
@@ -130,6 +153,9 @@ class DefaultExplorationAgentTest {
             appExplorer = explorer,
             pageAnalysisPort = SimplePageAnalysisPort(),
             skillLearner = NoOpSkillLearner(),
+            launchInitialWaitMs = 0L,
+            launchRetryDelayMs = 1L,
+            launchTimeoutMs = 10L,
         )
 
         val outcome = agent.explore(
@@ -169,6 +195,9 @@ class DefaultExplorationAgentTest {
             appExplorer = explorer,
             pageAnalysisPort = SimplePageAnalysisPort(),
             skillLearner = NoOpSkillLearner(),
+            launchInitialWaitMs = 0L,
+            launchRetryDelayMs = 1L,
+            launchTimeoutMs = 10L,
         )
 
         val outcome = agent.explore(
@@ -179,14 +208,90 @@ class DefaultExplorationAgentTest {
 
         assertEquals(1, outcome.pagesDiscovered)
     }
+
+    @Test
+    fun explore_waitsForTargetAppBeforeStarting() = runTest {
+        val explorer = LaunchSequenceExplorer(
+            captures = listOf(
+                testSnapshot(
+                    packageName = "app.lawnchair",
+                    activityName = "LauncherActivity",
+                    timestamp = 1L,
+                    clickableNodes = emptyList(),
+                ).toResult(),
+                testSnapshot(
+                    packageName = APP_PACKAGE,
+                    activityName = "BrowserActivity",
+                    timestamp = 2L,
+                    clickableNodes = emptyList(),
+                ).toResult(),
+            ),
+        )
+
+        val agent = DefaultExplorationAgent(
+            appLauncher = { true },
+            appExplorer = explorer,
+            pageAnalysisPort = SimplePageAnalysisPort(),
+            skillLearner = NoOpSkillLearner(),
+            launchInitialWaitMs = 0L,
+            launchRetryDelayMs = 1L,
+            launchTimeoutMs = 10L,
+        )
+
+        val outcome = agent.explore(
+            appPackage = APP_PACKAGE,
+            appName = "Browser",
+            budget = ExplorationBudget(maxSteps = 10),
+        )
+
+        assertEquals(1, outcome.pagesDiscovered)
+        assertTrue(explorer.captureCalls >= 2)
+    }
+
+    @Test
+    fun explore_throwsClearErrorWhenTargetAppNeverAppears() = runTest {
+        val explorer = LaunchSequenceExplorer(
+            captures = listOf(
+                testSnapshot(
+                    packageName = "app.lawnchair",
+                    activityName = "LauncherActivity",
+                    timestamp = 1L,
+                    clickableNodes = emptyList(),
+                ).toResult(),
+            ),
+        )
+
+        val agent = DefaultExplorationAgent(
+            appLauncher = { true },
+            appExplorer = explorer,
+            pageAnalysisPort = SimplePageAnalysisPort(),
+            skillLearner = NoOpSkillLearner(),
+            launchInitialWaitMs = 0L,
+            launchRetryDelayMs = 1L,
+            launchTimeoutMs = 5L,
+        )
+
+        var error: IllegalStateException? = null
+        try {
+            agent.explore(
+                appPackage = APP_PACKAGE,
+                appName = "Browser",
+                budget = ExplorationBudget(maxSteps = 10),
+            )
+        } catch (caught: IllegalStateException) {
+            error = caught
+        }
+
+        assertNotNull(error)
+        assertEquals(
+            "已启动应用 com.example.app，但无障碍当前仍看到 app.lawnchair。",
+            error?.message,
+        )
+    }
 }
 
 private const val APP_PACKAGE = "com.example.app"
 
-/**
- * Fake AppExplorer that simulates app navigation with a stack.
- * performClick pushes a new page, performBack pops back.
- */
 private class NavigationFakeExplorer(
     initialPage: PageTreeSnapshot,
     private val clickNavigations: Map<String, PageTreeSnapshot> = emptyMap(),
@@ -210,19 +315,32 @@ private class NavigationFakeExplorer(
     }
 
     override suspend fun performBack(): ExplorationResult? {
-        if (pageStack.size > 1) pageStack.removeLast()
+        if (pageStack.size > 1) {
+            pageStack.removeLast()
+        }
         return pageStack.lastOrNull()?.toResult()
     }
+}
 
-    private fun PageTreeSnapshot.toResult(): ExplorationResult {
-        return ExplorationResult(
-            packageName = packageName,
-            activityName = activityName,
-            pageTree = this,
-            screenshot = null,
-            capturedAt = timestamp,
-        )
+private class LaunchSequenceExplorer(
+    private val captures: List<ExplorationResult>,
+) : AppExplorer {
+    private var captureIndex = 0
+    var captureCalls = 0
+        private set
+
+    override suspend fun captureCurrentPage(): ExplorationResult? {
+        captureCalls++
+        val result = captures.getOrNull(captureIndex) ?: captures.lastOrNull()
+        if (captureIndex < captures.lastIndex) {
+            captureIndex++
+        }
+        return result
     }
+
+    override suspend fun performClick(nodeId: String): ExplorationResult? = null
+
+    override suspend fun performBack(): ExplorationResult? = null
 }
 
 private class SimplePageAnalysisPort : PageAnalysisPort {
@@ -329,5 +447,15 @@ private fun testClickableNode(nodeId: String, text: String): AccessibilityNodeSn
         isEditable = false,
         bounds = "0,0,200,100",
         children = emptyList(),
+    )
+}
+
+private fun PageTreeSnapshot.toResult(): ExplorationResult {
+    return ExplorationResult(
+        packageName = packageName,
+        activityName = activityName,
+        pageTree = this,
+        screenshot = null,
+        capturedAt = timestamp,
     )
 }
